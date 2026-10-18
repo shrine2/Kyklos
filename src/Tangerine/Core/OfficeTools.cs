@@ -25,51 +25,60 @@ public static class OfficeTools
             Directory.CreateDirectory(profileDir);
 
             var convertTo = BuildConvertTo(targetExt);
+            string? produced = null;
+            var detail = string.Empty;
 
-            var startInfo = new ProcessStartInfo(soffice)
+            // The very first soffice run on a machine has to bootstrap its user profile and
+            // can exit without producing anything. A second attempt always finds the profile
+            // ready, so retry once before declaring defeat.
+            for (var attempt = 0; attempt < 2 && produced is null; attempt++)
             {
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-            };
+                var startInfo = new ProcessStartInfo(soffice)
+                {
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                };
 
-            foreach (var argument in new[]
-                     {
-                         "--headless",
-                         "--norestore",
-                         "--nolockcheck",
-                         "--nodefault",
-                         "--nofirststartwizard",
-                         "-env:UserInstallation=" + new Uri(profileDir).AbsoluteUri,
-                         "--convert-to", convertTo,
-                         "--outdir", workDir,
-                         source,
-                     })
-            {
-                startInfo.ArgumentList.Add(argument);
+                foreach (var argument in new[]
+                         {
+                             "--headless",
+                             "--norestore",
+                             "--nolockcheck",
+                             "--nodefault",
+                             "--nofirststartwizard",
+                             "-env:UserInstallation=" + new Uri(profileDir).AbsoluteUri,
+                             "--convert-to", convertTo,
+                             "--outdir", workDir,
+                             source,
+                         })
+                {
+                    startInfo.ArgumentList.Add(argument);
+                }
+
+                using var process = Process.Start(startInfo)
+                                    ?? throw new InvalidOperationException("Could not start LibreOffice.");
+
+                var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
+                var stderrTask = process.StandardError.ReadToEndAsync(ct);
+
+                using var registration = ct.Register(() =>
+                {
+                    try { process.Kill(entireProcessTree: true); } catch { /* already exited */ }
+                });
+
+                await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+                var stdout = await stdoutTask.ConfigureAwait(false);
+                var stderr = await stderrTask.ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
+
+                produced = Directory.EnumerateFiles(workDir).FirstOrDefault();
+                detail = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
             }
 
-            using var process = Process.Start(startInfo)
-                                ?? throw new InvalidOperationException("Could not start LibreOffice.");
-
-            var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
-            var stderrTask = process.StandardError.ReadToEndAsync(ct);
-
-            using var registration = ct.Register(() =>
-            {
-                try { process.Kill(entireProcessTree: true); } catch { /* already exited */ }
-            });
-
-            await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
-            var stdout = await stdoutTask.ConfigureAwait(false);
-            var stderr = await stderrTask.ConfigureAwait(false);
-            ct.ThrowIfCancellationRequested();
-
-            var produced = Directory.EnumerateFiles(workDir).FirstOrDefault();
             if (produced is null)
             {
-                var detail = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
                 throw new InvalidOperationException(
                     $"LibreOffice produced no output for '{Path.GetFileName(source)}'. {Truncate(detail)}");
             }
