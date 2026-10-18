@@ -30,6 +30,10 @@ public static class FormatCatalog
 
     private static readonly string[] PdfExtensions = [".pdf"];
 
+    private static readonly string[] SubtitleExtensions = [".srt", ".vtt"];
+
+    private static readonly string[] DelimitedExtensions = [".csv", ".tsv"];
+
     private static readonly string[] DocumentExtensions =
     [
         ".docx", ".doc", ".docm", ".odt", ".rtf", ".txt", ".md", ".html", ".htm", ".epub",
@@ -44,6 +48,8 @@ public static class FormatCatalog
         foreach (var ext in ImageExtensions) KindMap[ext] = MediaKind.Image;
         foreach (var ext in PdfExtensions) KindMap[ext] = MediaKind.Pdf;
         foreach (var ext in DocumentExtensions) KindMap[ext] = MediaKind.Document;
+        foreach (var ext in SubtitleExtensions) KindMap[ext] = MediaKind.Subtitle;
+        foreach (var ext in DelimitedExtensions) KindMap[ext] = MediaKind.Delimited;
     }
 
     /// <summary>True when the wheel has anything at all to offer for these files.</summary>
@@ -66,7 +72,12 @@ public static class FormatCatalog
         return MediaKind.Unknown;
     }
 
-    public static List<MediaTarget> TargetsFor(MediaKind source)
+    /// <summary>
+    /// Targets offered for a source kind. When a sample path is supplied, its own format is
+    /// dropped from the ring — matching the macOS app, which never offers to convert a file
+    /// into the format it already is.
+    /// </summary>
+    public static List<MediaTarget> TargetsFor(MediaKind source, string? samplePath = null)
     {
         var list = source switch
         {
@@ -75,8 +86,17 @@ public static class FormatCatalog
             MediaKind.Image => ImageTargets(),
             MediaKind.Pdf => PdfTargets(),
             MediaKind.Document => DocumentTargets(),
+            MediaKind.Subtitle => SubtitleTargets(),
+            MediaKind.Delimited => DelimitedTargets(),
             _ => [],
         };
+
+        if (samplePath is not null)
+        {
+            var own = Path.GetExtension(samplePath).TrimStart('.');
+            if (own.Length > 0)
+                list.RemoveAll(t => string.Equals(t.Ext, own, StringComparison.OrdinalIgnoreCase));
+        }
 
         foreach (var target in list) ApplyAvailability(target);
         return list;
@@ -92,23 +112,23 @@ public static class FormatCatalog
         switch (source)
         {
             case MediaKind.Video:
-                tools.Add(new ToolItem(ToolId.Compress, options.Compress ? "Compress ✓" : "Compress", true, options.Compress));
-                tools.Add(new ToolItem(ToolId.TrimResize, options.HasTrim || options.ResizeWidth is not null ? "Trim/Size ✓" : "Trim/Size", false, options.HasTrim || options.ResizeWidth is not null));
-                tools.Add(new ToolItem(ToolId.StripMetadata, options.StripMetadata ? "No meta ✓" : "No meta", true, options.StripMetadata));
+                tools.Add(new ToolItem(ToolId.Compress, options.Compress ? "COMPRESS ✓" : "COMPRESS", true, options.Compress));
+                tools.Add(new ToolItem(ToolId.TrimResize, options.HasTrim || options.ResizeWidth is not null ? "TRIM/SIZE ✓" : "TRIM/SIZE", false, options.HasTrim || options.ResizeWidth is not null));
+                tools.Add(new ToolItem(ToolId.StripMetadata, options.StripMetadata ? "NO META ✓" : "NO META", true, options.StripMetadata));
                 tools.Add(new ToolItem(ToolId.ExtractAudio, "→ MP3", false, false));
                 tools.Add(new ToolItem(ToolId.MakeGif, "→ GIF", false, false));
                 break;
 
             case MediaKind.Audio:
-                tools.Add(new ToolItem(ToolId.Compress, options.Compress ? "Compress ✓" : "Compress", true, options.Compress));
-                tools.Add(new ToolItem(ToolId.TrimResize, options.HasTrim ? "Trim ✓" : "Trim", false, options.HasTrim));
-                tools.Add(new ToolItem(ToolId.StripMetadata, options.StripMetadata ? "No meta ✓" : "No meta", true, options.StripMetadata));
+                tools.Add(new ToolItem(ToolId.Compress, options.Compress ? "COMPRESS ✓" : "COMPRESS", true, options.Compress));
+                tools.Add(new ToolItem(ToolId.TrimResize, options.HasTrim ? "TRIM ✓" : "TRIM", false, options.HasTrim));
+                tools.Add(new ToolItem(ToolId.StripMetadata, options.StripMetadata ? "NO META ✓" : "NO META", true, options.StripMetadata));
                 break;
 
             case MediaKind.Image:
-                tools.Add(new ToolItem(ToolId.Compress, options.Compress ? "Compress ✓" : "Compress", true, options.Compress));
-                tools.Add(new ToolItem(ToolId.TrimResize, options.ResizeWidth is not null ? "Resize ✓" : "Resize", false, options.ResizeWidth is not null));
-                tools.Add(new ToolItem(ToolId.StripMetadata, options.StripMetadata ? "No meta ✓" : "No meta", true, options.StripMetadata));
+                tools.Add(new ToolItem(ToolId.Compress, options.Compress ? "COMPRESS ✓" : "COMPRESS", true, options.Compress));
+                tools.Add(new ToolItem(ToolId.TrimResize, options.ResizeWidth is not null ? "RESIZE ✓" : "RESIZE", false, options.ResizeWidth is not null));
+                tools.Add(new ToolItem(ToolId.StripMetadata, options.StripMetadata ? "NO META ✓" : "NO META", true, options.StripMetadata));
                 tools.Add(new ToolItem(ToolId.ToPdf, "→ PDF", false, false));
                 break;
         }
@@ -285,19 +305,20 @@ public static class FormatCatalog
         },
     };
 
+    // Ordered to match the macOS wheel: JPG, PNG, WebP, HEIC, TIFF, AVIF, BMP, then PDF.
     private static List<MediaTarget> ImageTargets() =>
     [
-        new MediaTarget
-        {
-            Ext = "png", Label = "PNG", Output = MediaKind.Image, Source = MediaKind.Image,
-            Encoder = "png", Muxer = "image2", Hint = "lossless",
-            Args = (source, o) => StillImage(source, o, ["-c:v", "png"], evenDimensions: false),
-        },
         new MediaTarget
         {
             Ext = "jpg", Label = "JPG", Output = MediaKind.Image, Source = MediaKind.Image,
             Encoder = "mjpeg", Muxer = "image2", Hint = "lossy, small",
             Args = (source, o) => StillImage(source, o, ["-c:v", "mjpeg", "-q:v", Quality.ImageQuality(o), "-pix_fmt", "yuvj420p"], evenDimensions: false),
+        },
+        new MediaTarget
+        {
+            Ext = "png", Label = "PNG", Output = MediaKind.Image, Source = MediaKind.Image,
+            Encoder = "png", Muxer = "image2", Hint = "lossless",
+            Args = (source, o) => StillImage(source, o, ["-c:v", "png"], evenDimensions: false),
         },
         new MediaTarget
         {
@@ -307,9 +328,8 @@ public static class FormatCatalog
         },
         new MediaTarget
         {
-            Ext = "avif", Label = "AVIF", Output = MediaKind.Image, Source = MediaKind.Image,
-            Encoder = "libaom-av1", Muxer = "avif", Hint = "AV1 image",
-            Args = (source, o) => StillImage(source, o, ["-c:v", "libaom-av1", "-crf", o.Compress ? "34" : "28", "-b:v", "0", "-still-picture", "1"], evenDimensions: false),
+            Ext = "heic", Label = "HEIC", Output = MediaKind.Image, Source = MediaKind.Image,
+            NeedsWic = true, Hint = "Apple / iPhone format",
         },
         new MediaTarget
         {
@@ -319,9 +339,20 @@ public static class FormatCatalog
         },
         new MediaTarget
         {
+            Ext = "avif", Label = "AVIF", Output = MediaKind.Image, Source = MediaKind.Image,
+            Encoder = "libaom-av1", Muxer = "avif", Hint = "AV1 image",
+            Args = (source, o) => StillImage(source, o, ["-c:v", "libaom-av1", "-crf", o.Compress ? "34" : "28", "-b:v", "0", "-still-picture", "1"], evenDimensions: false),
+        },
+        new MediaTarget
+        {
             Ext = "bmp", Label = "BMP", Output = MediaKind.Image, Source = MediaKind.Image,
             Encoder = "bmp", Muxer = "image2", Hint = "uncompressed",
             Args = (source, o) => StillImage(source, o, ["-c:v", "bmp"], evenDimensions: false),
+        },
+        new MediaTarget
+        {
+            Ext = "pdf", Label = "PDF", Output = MediaKind.Pdf, Source = MediaKind.Image,
+            NeedsPdfWrite = true, Hint = "image → PDF",
         },
         new MediaTarget
         {
@@ -329,28 +360,18 @@ public static class FormatCatalog
             Encoder = "gif", Muxer = "gif", Hint = "single frame",
             Args = (source, o) => StillImage(source, o, ["-c:v", "gif"], evenDimensions: false),
         },
-        new MediaTarget
-        {
-            Ext = "heic", Label = "HEIC", Output = MediaKind.Image, Source = MediaKind.Image,
-            NeedsWic = true, Hint = "Apple / iPhone format",
-        },
-        new MediaTarget
-        {
-            Ext = "pdf", Label = "PDF", Output = MediaKind.Pdf, Source = MediaKind.Image,
-            NeedsPdfWrite = true, Hint = "image → PDF",
-        },
     ];
 
     private static List<MediaTarget> PdfTargets() =>
     [
         new MediaTarget
         {
-            Ext = "png", Label = "PNG", Output = MediaKind.Image, Source = MediaKind.Pdf,
+            Ext = "jpg", Label = "JPG", Output = MediaKind.Image, Source = MediaKind.Pdf,
             NeedsPdfRender = true, Hint = "300 DPI page images",
         },
         new MediaTarget
         {
-            Ext = "jpg", Label = "JPG", Output = MediaKind.Image, Source = MediaKind.Pdf,
+            Ext = "png", Label = "PNG", Output = MediaKind.Image, Source = MediaKind.Pdf,
             NeedsPdfRender = true, Hint = "300 DPI page images",
         },
         new MediaTarget
@@ -359,6 +380,28 @@ public static class FormatCatalog
             NeedsPdfText = true, Hint = "extract text",
         },
     ];
+
+    private static List<MediaTarget> SubtitleTargets() =>
+    [
+        TextTarget("txt", "TXT", MediaKind.Document, "plain transcript"),
+        TextTarget("srt", "SRT", MediaKind.Subtitle, "SubRip"),
+        TextTarget("vtt", "VTT", MediaKind.Subtitle, "WebVTT"),
+    ];
+
+    private static List<MediaTarget> DelimitedTargets() =>
+    [
+        TextTarget("csv", "CSV", MediaKind.Delimited, "comma separated"),
+        TextTarget("tsv", "TSV", MediaKind.Delimited, "tab separated"),
+    ];
+
+    private static MediaTarget TextTarget(string ext, string label, MediaKind output, string hint) => new()
+    {
+        Ext = ext,
+        Label = label,
+        Output = output,
+        NeedsText = true,
+        Hint = hint,
+    };
 
     private static List<MediaTarget> DocumentTargets() =>
     [
@@ -436,6 +479,10 @@ public static class FormatCatalog
         }
 
         if (target.NeedsPdfWrite || target.NeedsPdfRender || target.NeedsPdfText)
+            return;
+
+        // Pure-text conversions are built in, so they never depend on an external tool.
+        if (target.NeedsText)
             return;
 
         if (!Toolchain.FfmpegReady)

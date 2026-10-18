@@ -27,6 +27,8 @@ internal sealed class RadialMenuForm : LayeredForm
     private MediaKind _source = MediaKind.Unknown;
     private ConvertOptions _options = new();
     private string _caption = string.Empty;
+    private long _sourceBytes;
+    private int _sourceCount;
 
     private float _scale = 1f;
     private int _radius;
@@ -72,10 +74,22 @@ internal sealed class RadialMenuForm : LayeredForm
         _options = options;
 
         _targets.Clear();
-        _targets.AddRange(FormatCatalog.TargetsFor(source));
+        _targets.AddRange(FormatCatalog.TargetsFor(source, files.FirstOrDefault()));
 
         _caption = BuildCaption(files);
+        _sourceCount = files.Count;
+        _sourceBytes = SumBytes(files);
         ResetHover();
+    }
+
+    private static long SumBytes(IReadOnlyList<string> files)
+    {
+        long total = 0;
+        foreach (var file in files)
+        {
+            try { total += new FileInfo(file).Length; } catch { /* unreadable entries just do not count */ }
+        }
+        return total;
     }
 
     public void ShowWheel(Point anchor, bool interactive)
@@ -310,12 +324,12 @@ internal sealed class RadialMenuForm : LayeredForm
             if (_tools.Count > 0 && distance <= _innerOuter)
             {
                 var sweep = 360.0 / _tools.Count;
-                _hoverTool = Math.Clamp((int)(wheelAngle / sweep), 0, _tools.Count - 1);
+                _hoverTool = Math.Clamp((int)(((wheelAngle + sweep / 2) % 360) / sweep), 0, _tools.Count - 1);
             }
             else if (_targets.Count > 0 && distance >= _outerInner)
             {
                 var sweep = 360.0 / _targets.Count;
-                _hoverTarget = Math.Clamp((int)(wheelAngle / sweep), 0, _targets.Count - 1);
+                _hoverTarget = Math.Clamp((int)(((wheelAngle + sweep / 2) % 360) / sweep), 0, _targets.Count - 1);
             }
         }
 
@@ -416,7 +430,7 @@ internal sealed class RadialMenuForm : LayeredForm
 
         for (var i = 0; i < count; i++)
         {
-            var start = -90f + i * sweep;
+            var start = WedgeStart(i, sweep);
             using var path = WedgePath(cx, cy, innerRadius, outerRadius, start, sweep);
 
             if (i == hovered && enabled(i))
@@ -440,7 +454,7 @@ internal sealed class RadialMenuForm : LayeredForm
             var text = label(i);
             if (string.IsNullOrEmpty(text)) continue;
 
-            var midAngle = (-90f + i * sweep + sweep / 2f) * MathF.PI / 180f;
+            var midAngle = (-90f + i * sweep) * MathF.PI / 180f;
             var point = new PointF(cx + middleRadius * MathF.Cos(midAngle), cy + middleRadius * MathF.Sin(midAngle));
 
             // Shrink the label so it never spills into a neighbouring wedge.
@@ -458,7 +472,7 @@ internal sealed class RadialMenuForm : LayeredForm
         if (_hoverTool < 0 || _hoverTool >= _tools.Count || !_tools[_hoverTool].Toggle) return;
 
         var sweep = 360f / _tools.Count;
-        var start = -90f + _hoverTool * sweep;
+        var start = WedgeStart(_hoverTool, sweep);
         var progress = Math.Min(1f, _dwellMs / (float)DwellThresholdMs);
         var middleRadius = (_hubR * 1.04f + _innerOuter) / 2f;
 
@@ -482,9 +496,45 @@ internal sealed class RadialMenuForm : LayeredForm
         using (var pen = new Pen(Color.FromArgb(70, 255, 255, 255), Math.Max(1f, _scale)))
             g.DrawEllipse(pen, cx - radius, cy - radius, radius * 2, radius * 2);
 
-        var text = _hoverHub ? "✕" : KindLabel(_source);
-        using var font = Theme.Font(Math.Max(8f, radius * (_hoverHub ? 0.62f : 0.46f)), FontStyle.Bold);
-        Theme.DrawShadowed(g, text, font, _hoverHub ? Color.White : Theme.Muted, new PointF(cx, cy));
+        if (_hoverHub)
+        {
+            using var cancelFont = Theme.Font(Math.Max(8f, radius * 0.62f), FontStyle.Bold);
+            Theme.DrawShadowed(g, "✕", cancelFont, Color.White, new PointF(cx, cy));
+            return;
+        }
+
+        // The macOS app puts the size of the selection in the hub while a format is being
+        // chosen. The pill is allowed to run a little wider than the disc.
+        if (_sourceBytes > 0)
+        {
+            using var font = Theme.Font(Math.Max(8f, radius * 0.42f), FontStyle.Bold);
+            var text = _sourceCount > 1 ? $"{_sourceCount} files" : Paths.HumanSize(_sourceBytes);
+            var measured = g.MeasureString(text, font);
+
+            var bounds = new RectangleF(
+                cx - measured.Width / 2f - radius * 0.30f,
+                cy - measured.Height / 2f,
+                measured.Width + radius * 0.60f,
+                measured.Height);
+
+            using var pill = PillPath(bounds);
+            using (var fill = new SolidBrush(Color.FromArgb(234, 255, 253, 245)))
+                g.FillPath(fill, pill);
+            using (var rim = new Pen(Color.FromArgb(56, 0, 0, 0), Math.Max(1f, _scale)))
+                g.DrawPath(rim, pill);
+
+            using var textBrush = new SolidBrush(Color.FromArgb(255, 28, 26, 24));
+            using var centred = new StringFormat
+            {
+                Alignment = StringAlignment.Center,
+                LineAlignment = StringAlignment.Center,
+            };
+            g.DrawString(text, font, textBrush, bounds, centred);
+            return;
+        }
+
+        using var kindFont = Theme.Font(Math.Max(8f, radius * 0.46f), FontStyle.Bold);
+        Theme.DrawShadowed(g, KindLabel(_source), kindFont, Theme.Muted, new PointF(cx, cy));
     }
 
     private void DrawCaption(Graphics g, float cx)
@@ -523,6 +573,13 @@ internal sealed class RadialMenuForm : LayeredForm
         return Interactive ? _caption : $"{_caption} — release on a format";
     }
 
+    /// <summary>
+    /// Where wedge <paramref name="index"/> starts. The first wedge is centred on 12 o'clock —
+    /// matching the macOS app, where the primary format sits at the top — so it begins half a
+    /// sweep anticlockwise of the vertical.
+    /// </summary>
+    private static float WedgeStart(int index, float sweep) => -90f - sweep / 2f + index * sweep;
+
     private static string KindLabel(MediaKind kind) => kind switch
     {
         MediaKind.Video => "VID",
@@ -530,6 +587,8 @@ internal sealed class RadialMenuForm : LayeredForm
         MediaKind.Image => "IMG",
         MediaKind.Pdf => "PDF",
         MediaKind.Document => "DOC",
+        MediaKind.Subtitle => "SUB",
+        MediaKind.Delimited => "TBL",
         _ => "•••",
     };
 

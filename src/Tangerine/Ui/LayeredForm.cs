@@ -131,4 +131,15 @@ internal abstract class LayeredForm : Form
         path.CloseFigure();
         return path;
     }
+
+    /// <summary>A stadium/lozenge shape: a rectangle with semicircular ends.</summary>
+    protected static GraphicsPath PillPath(RectangleF bounds)
+    {
+        var radius = bounds.Height / 2f;
+        var path = new GraphicsPath();
+        path.AddArc(bounds.Left, bounds.Top, radius * 2, radius * 2, 90, 180);
+        path.AddArc(bounds.Right - radius * 2, bounds.Top, radius * 2, radius * 2, 270, 180);
+        path.CloseFigure();
+        return path;
+    }
 }

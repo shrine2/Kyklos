@@ -68,6 +68,19 @@ internal static class SelfTest
             }
         }
 
+        // Text conversions are judged on their contents, not just on a file existing.
+        string TryRead(string path)
+        {
+            try { return File.Exists(path) ? File.ReadAllText(path) : string.Empty; }
+            catch { return string.Empty; }
+        }
+
+        void Verify(bool condition, string label, string detail)
+        {
+            if (condition) Line($"PASS  {label,-34} content verified");
+            else { failures++; Line($"FAIL  {label,-34} {detail}"); }
+        }
+
         // ---------------------------------------------------------------- fixtures
 
         var pngPath = Path.Combine(dir, "sample-image.png");
@@ -189,6 +202,57 @@ internal static class SelfTest
             {
                 await Check("pdf -> txt", pdfPath, "txt");
             }
+        }
+
+        // ---------------------------------------------------------------- subtitles and tables
+
+        if (Wants("text"))
+        {
+            Line(string.Empty);
+            Line("text");
+
+            var srtPath = Path.Combine(dir, "subs-a.srt");
+            File.WriteAllText(srtPath,
+                "1\n00:00:01,000 --> 00:00:03,500\nHello <i>world</i>\n\n" +
+                "2\n00:00:04,000 --> 00:00:06,250\nSecond cue\n", Encoding.UTF8);
+
+            await Check("srt -> vtt", srtPath, "vtt");
+            await Check("srt -> txt", srtPath, "txt");
+
+            var vttText = TryRead(Path.Combine(dir, "subs-a.vtt"));
+            if (vttText.Length == 0) { failures++; Line("FAIL  vtt content                        not written"); }
+            else
+            {
+                Verify(vttText.StartsWith("WEBVTT", StringComparison.Ordinal), "vtt header", "missing the WEBVTT header");
+                Verify(vttText.Contains("00:00:01.000 --> 00:00:03.500", StringComparison.Ordinal), "vtt timestamps", "timestamps were not converted to a dot separator");
+            }
+
+            var txtText = TryRead(Path.Combine(dir, "subs-a.txt"));
+            Verify(txtText.Contains("Hello world", StringComparison.Ordinal), "txt strips markup", "inline markup was not stripped");
+
+            var vttPath = Path.Combine(dir, "subs-b.vtt");
+            File.WriteAllText(vttPath,
+                "WEBVTT\n\nNOTE this block is ignored\n\n00:00:02.500 --> 00:00:05.000\nFrom WebVTT\n", Encoding.UTF8);
+
+            await Check("vtt -> srt", vttPath, "srt");
+            var backToSrt = TryRead(Path.Combine(dir, "subs-b.srt"));
+            Verify(backToSrt.Contains("00:00:02,500 --> 00:00:05,000", StringComparison.Ordinal), "srt timestamps", "timestamps were not converted to a comma separator");
+            Verify(!backToSrt.Contains("NOTE", StringComparison.Ordinal), "srt drops notes", "the VTT NOTE block leaked into the SRT");
+
+            var csvPath = Path.Combine(dir, "table-a.csv");
+            File.WriteAllText(csvPath,
+                "name,note,size\n\"Smith, John\",\"He said \"\"hi\"\"\",42\nplain,text,7\n", Encoding.UTF8);
+
+            await Check("csv -> tsv", csvPath, "tsv");
+            var tsvText = TryRead(Path.Combine(dir, "table-a.tsv"));
+            Verify(tsvText.Contains("Smith, John\t", StringComparison.Ordinal), "tsv keeps commas", "an embedded comma was lost or re-quoted");
+            Verify(tsvText.Contains("\"He said \"\"hi\"\"\"\t", StringComparison.Ordinal), "tsv escapes quotes", "escaped quotes were not preserved");
+
+            var tsvPath = Path.Combine(dir, "table-b.tsv");
+            File.WriteAllText(tsvPath, "a\tb\tc\n1\t2\t3\n", Encoding.UTF8);
+
+            await Check("tsv -> csv", tsvPath, "csv");
+            Verify(TryRead(Path.Combine(dir, "table-b.csv")).StartsWith("a,b,c", StringComparison.Ordinal), "csv delimiter", "tabs were not converted to commas");
         }
 
         // ---------------------------------------------------------------- documents

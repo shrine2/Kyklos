@@ -46,14 +46,22 @@ Output: **MP3, M4A, WAV, FLAC, OGG, OPUS, AIFF, WMA**.
 Output: **PNG, JPG** (300 DPI page images), **TXT** (extracted text).
 
 **Documents** input: docx, doc, docm, odt, rtf, txt, md, html, htm, epub, pptx, ppt, odp,
-xlsx, xls, ods, csv, xml, json, log, pages, numbers, key, wpd, wps.
+xlsx, xls, ods, xml, json, log, pages, numbers, key, wpd, wps.
 Output: **PDF, TXT, DOCX, ODT, EPUB, HTML, RTF** — *requires LibreOffice (see below)*.
+
+**Subtitles** input: srt, vtt. Output: **TXT, SRT, VTT**.
+
+**Tables** input: csv, tsv. Output: **CSV, TSV**.
+
+Subtitles and tables are done inside the app, so they still work when ffmpeg and LibreOffice
+are both missing.
 
 \* HEIC output needs the Microsoft Store **HEIF Image Extensions** package. Without it, HEIC
 is greyed out with that reason.
 
 Every target is checked against a live capability probe of the local `ffmpeg` at startup, so
-the wheel only ever shows things this machine can actually produce.
+the wheel only ever shows things this machine can actually produce. A file's own format is
+never offered as a target, so the ring always means something.
 
 ### Tools, in place of the macOS frameworks
 
@@ -118,7 +126,7 @@ through the real pipeline:
 
 ```powershell
 Tangerine.exe --selftest "C:\temp\tangerine-selftest" all
-Tangerine.exe --selftest "C:\temp\tangerine-selftest" video    # images|video|audio|pdf|docs|all
+Tangerine.exe --selftest "C:\temp\tangerine-selftest" video    # images|video|audio|pdf|text|docs|all
 ```
 
 Quote any path containing spaces. It writes `selftest-report.txt` into the target folder and
@@ -147,6 +155,8 @@ src/Tangerine
     SettingsForm.cs  AdvancedDialog.cs  ProgressForm.cs  Theme.cs  Dark.cs
 ```
 
+Also `Core/TextTools.cs` holds the subtitle and delimited conversions.
+
 ### Two notes worth keeping
 
 **Why not intercept Shift+drag?** Explorer owns its OLE drag loop, and a modifier change
@@ -160,3 +170,30 @@ violation *after* all output is written and all checks pass. `NativeMethods.Hard
 and then ends the process without running driver detach, which is safe here because everything
 is already on disk. It is the difference between the self-test reporting `ALL CHECKS PASSED`
 and the same run reporting an `0xC0000005`.
+
+## Compared with the Mac original
+
+The wheel geometry was matched against Leap Studio's own press screenshots of Tangerine 1.4
+(the macOS build is App Store only, and needs macOS 13+ on Apple silicon, so there is no
+binary to inspect here — the vendor's published spec and press images are the evidence):
+
+- The first format is centred on 12 o'clock and the ring runs clockwise: JPG, PNG, WebP,
+  HEIC, TIFF, AVIF, BMP, then PDF.
+- A file's own format never appears on its own ring.
+- The hub carries the size of the selection (macOS shows `2.2 MB`; this shows the same pill).
+- Tool wedges use icon-style uppercase labels: COMPRESS, RESIZE, NO META, → PDF.
+
+Known differences, deliberately:
+
+- **No AirDrop.** The macOS *Control* wheel is file actions (AirDrop, Float, Copy, Move, Copy
+  Path, Terminal). There is no Windows equivalent of AirDrop, and the rest are Explorer's job.
+- **Tools share the wheel** with formats instead of living on a separate Option/Command ring.
+- **No macOS-only targets.** Pages, Numbers and Key documents, and PDF→PAGES/PPTX/XLSX, have
+  no Windows converter.
+- **Image → DOCX.** The macOS image wheel offers it; LibreOffice refuses `--convert-to docx`
+  for a picture ("no export filter", it opens images in Draw), so it would need a hand-written
+  OOXML writer.
+- **Archives were out of scope** by choice — ZIP/TAR/GZIP are absent rather than half-done.
+
+Everything else on the original's format list is present, and the Windows build adds targets
+the original does not have: MP4→M4A/WAV/FLAC audio extraction, and WebP/AVIF/TIFF/BMP→GIF.

@@ -8,6 +8,8 @@ public enum MediaKind
     Image,
     Pdf,
     Document,
+    Subtitle,
+    Delimited,
 }
 
 public enum ToolId
@@ -75,6 +77,9 @@ public sealed class MediaTarget
 
     /// <summary>True when the source is a PDF whose text is extracted (PdfPig).</summary>
     public bool NeedsPdfText { get; init; }
+
+    /// <summary>True when this is a pure-text conversion handled by <see cref="TextTools"/>.</summary>
+    public bool NeedsText { get; init; }
 
     /// <summary>Builds the ffmpeg argument list (input + codec options); output path is appended by the converter.</summary>
     public Func<string, ConvertOptions, List<string>>? Args { get; init; }

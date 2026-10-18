@@ -56,6 +56,12 @@ public static class Converter
                 await Task.Run(() => PdfTools.ExtractText(source, path), ct).ConfigureAwait(false);
                 produced = [writeTarget];
             }
+            else if (target.NeedsText)
+            {
+                var path = writeTarget;
+                await Task.Run(() => TextTools.Convert(source, target.Ext, path), ct).ConfigureAwait(false);
+                produced = [writeTarget];
+            }
             else if (target.NeedsWic)
             {
                 var path = writeTarget;
