@@ -1,11 +1,12 @@
-# Tangerine for Windows
+# Kyklos for Windows
 
 A Windows take on Tangerine — grab a file, get a radial
 wheel of formats, pick one, done. Conversions happen in place; there is no import step, no
 project file, no window to clean up afterwards.
 
-The original is a macOS/Apple-silicon app. This is a native Windows rebuild: C# / .NET 9,
-WinForms, a real tray application, no Electron and no runtime to install.
+The original is a macOS/Apple-silicon app called Tangerine. This is a native Windows rebuild,
+under its own name: C# / .NET 9, WinForms, a real tray application, no Electron and no runtime
+to install.
 
 ---
 
@@ -22,11 +23,28 @@ Three ways to get the wheel:
 | --- | --- | --- |
 | **Drag trigger** | Hold `Ctrl+Alt` and start dragging a file in Explorer | An invisible full-screen drop surface arms itself; drag over it and the wheel opens |
 | **Global hotkey** | `Ctrl+Alt+C` | Converts whatever is selected in Explorer, or the files on the clipboard |
-| **Drop target** | The floating tangerine icon (bottom-right by default) | Drag files onto it, or click it to use the current Explorer selection |
+| **Drop target** | The floating Kyklos disc (bottom-right by default) | Drag files onto it, or click it to use the current Explorer selection |
 
 The drag trigger is configurable (`Ctrl+Shift`, `Alt+Shift`, `Shift`, `Alt`) because plain
 *Shift*+drag in Explorer means "move". The hotkey is configurable too, and both live in
 **Settings**.
+
+## While it converts
+
+The wheel is the progress display. Once you commit a format, the hub turns into a rotating
+spinner, the line under the wheel counts the batch (`Converting 3 / 12`) and names the file
+being worked on, and the wedges stop responding. When the batch finishes the wheel fades out
+and disappears — a second conversion started straight afterwards never stacks a window on top
+of the first, because no window is ever opened.
+
+Cancelling:
+
+- an **interactive** wheel (hotkey, drop target, tray menu) takes a click on the hub, or `Esc`;
+- a **drag-driven** wheel stays click-through on purpose, so a long job cannot swallow clicks
+  on whatever is underneath — cancel those with `Esc`.
+
+If something fails, a tray balloon says how many; the per-file error text goes to
+`%APPDATA%\Kyklos\conversions.log`.
 
 ## Formats
 
@@ -90,23 +108,24 @@ never offered as a target, so the ring always means something.
 
 ```powershell
 # develop
-dotnet build "src\Tangerine\Tangerine.csproj"
-& "src\Tangerine\bin\Debug\net9.0-windows10.0.19041.0\Tangerine.exe"
+dotnet build "src\Kyklos\Kyklos.csproj"
+& "src\Kyklos\bin\Debug\net9.0-windows10.0.19041.0\Kyklos.exe"
 
 # one self-contained exe (~54 MB, no runtime required)
-dotnet publish "src\Tangerine\Tangerine.csproj" -c Release -r win-x64 `
+dotnet publish "src\Kyklos\Kyklos.csproj" -c Release -r win-x64 `
   --self-contained true -p:PublishSingleFile=true `
   -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true `
   -o dist
 ```
 
 The app is single-instance. Anything launched a second time — including the **Send to →
-Convert with Tangerine** shortcut, which Settings can install for you — hands its file list to
+Convert with Kyklos** shortcut, which Settings can install for you — hands its file list to
 the running tray over `WM_COPYDATA` and exits.
 
 ## Settings
 
-Stored as JSON at `%APPDATA%\TangerineWin\settings.json`; a crash log lands beside it.
+Stored as JSON at `%APPDATA%\Kyklos\settings.json`; a crash log and the conversion failure log
+land beside it.
 
 - **Output** — write beside the original, or into a subfolder (default `converted`).
 - **If the name exists** — rename (default), overwrite, or skip.
@@ -125,37 +144,50 @@ The binary carries an end-to-end harness that generates its own fixtures and con
 through the real pipeline:
 
 ```powershell
-Tangerine.exe --selftest "C:\temp\tangerine-selftest" all
-Tangerine.exe --selftest "C:\temp\tangerine-selftest" video    # images|video|audio|pdf|text|docs|all
+Kyklos.exe --selftest "C:\temp\kyklos-selftest" all
+Kyklos.exe --selftest "C:\temp\kyklos-selftest" video    # images|video|audio|pdf|text|docs|all
 ```
 
 Quote any path containing spaces. It writes `selftest-report.txt` into the target folder and
-sets its exit code to the number of failed checks. `--smoketest` boots the tray UI, then shuts
-it down the way the Exit menu item does — useful for verifying the GUI starts and tears down
-cleanly.
+sets its exit code to the number of failed checks.
+
+Two more switches exist for checking the GUI itself:
+
+```powershell
+Kyklos.exe --smoketest "C:\temp\sample.png"
+Kyklos.exe --uipreview "C:\temp\sample.png"
+```
+
+`--smoketest` boots the real tray, toggles the floating drop target off and on again, runs one
+genuine conversion through the very code path the wheel uses, and exits the way **Exit** does —
+it fails loudly rather than passing silently. `--uipreview` opens the wheel and drives it
+through a simulated batch so the spinner, the caption and the fade-out can be looked at without
+converting anything; it is the quickest way to eyeball a layout change.
+
+Neither switch needs the single-instance lock, so they are safe to run while the tray is up.
 
 ## Project layout
 
 ```
-src/Tangerine
-  Program.cs              entry point, single-instance mutex, IPC hand-off, --selftest/--smoketest
+src/Kyklos
+  Program.cs              entry point, single-instance mutex, IPC hand-off, CLI switches
   TrayApp.cs              orchestrator: tray icon, hotkey, drag surface, wheel, conversions
   Core/
     Converter.cs          dispatch, in-place staging, batch runs
     FormatCatalog.cs      target tables, availability against the live probe
     Toolchain.cs          ffmpeg / soffice discovery and capability probe
     PdfTools.cs  WicImage.cs  OfficeTools.cs
+    TextTools.cs          subtitle (SRT/VTT) and delimited (CSV/TSV) conversions
     Settings.cs  Paths.cs  SelfTest.cs
   Interop/
     NativeMethods.cs      Win32, incl. the teardown fix described below
     ModifierWatcher.cs    arms the drop surface on modifiers + pointer-down over the shell
     HotkeyWindow.cs  Hotkeys.cs  IpcWindow.cs  ClipboardFiles.cs
   Ui/
-    RadialMenuForm.cs  DropSurfaceForm.cs  DropTargetForm.cs
-    SettingsForm.cs  AdvancedDialog.cs  ProgressForm.cs  Theme.cs  Dark.cs
+    RadialMenuForm.cs     the wheel; also draws the hub spinner and the fade-out
+    DropSurfaceForm.cs  DropTargetForm.cs
+    SettingsForm.cs  AdvancedDialog.cs  Theme.cs  Dark.cs
 ```
-
-Also `Core/TextTools.cs` holds the subtitle and delimited conversions.
 
 ### Two notes worth keeping
 
