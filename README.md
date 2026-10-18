@@ -125,7 +125,8 @@ the running tray over `WM_COPYDATA` and exits.
 ## Settings
 
 Stored as JSON at `%APPDATA%\Kyklos\settings.json`; a crash log and the conversion failure log
-land beside it.
+land beside it. A fault raised inside a user-interface event goes to that crash log as well —
+Kyklos says so and carries on rather than disappearing.
 
 - **Output** — write beside the original, or into a subfolder (default `converted`).
 - **If the name exists** — rename (default), overwrite, or skip.
@@ -158,13 +159,17 @@ Kyklos.exe --smoketest "C:\temp\sample.png"
 Kyklos.exe --uipreview "C:\temp\sample.png"
 ```
 
-`--smoketest` boots the real tray, toggles the floating drop target off and on again, runs one
-genuine conversion through the very code path the wheel uses, and exits the way **Exit** does —
-it fails loudly rather than passing silently. `--uipreview` opens the wheel and drives it
-through a simulated batch so the spinner, the caption and the fade-out can be looked at without
-converting anything; it is the quickest way to eyeball a layout change.
+`--smoketest` boots the real tray, runs one genuine conversion through the very code path the
+wheel uses, then walks the floating drop target through show/hide/show and clicks **Hide this
+icon** in its own context menu, and finally exits the way **Exit** does. Every failure mode has
+its own exit code, because a smoke test that can pass without testing anything is worse than no
+test at all: `1` the drop target did not settle, `2` the conversion failed, `3` a UI-thread
+exception was logged, `4` hiding the icon failed, `5` a phase threw. `--uipreview` opens the
+wheel and drives it through a simulated batch so the spinner, the caption and the fade-out can
+be looked at without converting anything; it is the quickest way to eyeball a layout change.
 
-Neither switch needs the single-instance lock, so they are safe to run while the tray is up.
+Both switches run ahead of the single-instance check, so they are safe to use while the tray is
+up, and neither can block on a dialog — which makes them safe to run unattended.
 
 ## Project layout
 

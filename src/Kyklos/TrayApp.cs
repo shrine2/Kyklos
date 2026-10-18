@@ -412,6 +412,17 @@ internal sealed class TrayApp : ApplicationContext
 
     private void ShowDropTargetMenu(Point screenPoint)
     {
+        var menu = BuildDropTargetMenu();
+
+        // The menu is owned by nothing, so it has to be disposed by hand — but never from inside
+        // its own Closed event. WinForms is still unwinding the click at that point and goes on
+        // to touch the strip, which fails with "Cannot access a disposed object".
+        menu.Closed += (_, _) => Post(menu.Dispose);
+        menu.Show(screenPoint);
+    }
+
+    private ContextMenuStrip BuildDropTargetMenu()
+    {
         var menu = new ContextMenuStrip
         {
             BackColor = Dark.Panel,
@@ -420,15 +431,31 @@ internal sealed class TrayApp : ApplicationContext
             ShowImageMargin = false,
         };
 
-        menu.Items.Add(new ToolStripMenuItem("Convert selection", null, (_, _) => OpenWheelFromSelection(interactive: true)));
-        menu.Items.Add(new ToolStripMenuItem("Hide this icon", null, (_, _) => SetDropTargetVisible(false)));
+        // Every one of these defers its work to the next message-loop turn: the handler for the
+        // item we are in the middle of may dispose this very menu, or the window it came from.
+        menu.Items.Add(new ToolStripMenuItem("Convert selection", null, (_, _) => Post(() => OpenWheelFromSelection(interactive: true))));
+        menu.Items.Add(new ToolStripMenuItem("Hide this icon", null, (_, _) => Post(() => SetDropTargetVisible(false))));
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(new ToolStripMenuItem("Settings…", null, (_, _) => OpenSettings()));
-        menu.Items.Add(new ToolStripMenuItem("Exit", null, (_, _) => ExitApplication()));
+        menu.Items.Add(new ToolStripMenuItem("Settings…", null, (_, _) => Post(OpenSettings)));
+        menu.Items.Add(new ToolStripMenuItem("Exit", null, (_, _) => Post(ExitApplication)));
 
-        // The menu is not owned by any control, so it has to be disposed by hand.
-        menu.Closed += (_, _) => menu.Dispose();
-        menu.Show(screenPoint);
+        return menu;
+    }
+
+    /// <summary>
+    /// Queues <paramref name="action"/> for the next turn of the message loop, so it runs after
+    /// the current event — typically a menu click — has finished being processed.
+    /// </summary>
+    private static void Post(Action action)
+    {
+        var context = SynchronizationContext.Current;
+        if (context is null)
+        {
+            action();
+            return;
+        }
+
+        context.Post(_ => action(), null);
     }
 
     private void OpenSettings()
@@ -438,8 +465,12 @@ internal sealed class TrayApp : ApplicationContext
 
         ApplyInteractionSettings();
         UpdateStatusItem();
-        _tray.ContextMenuStrip?.Dispose();
+
+        // Swap the tray menu, disposing the old strip on a later turn: the click that got us
+        // here may still be unwinding through it.
+        var previous = _tray.ContextMenuStrip;
         _tray.ContextMenuStrip = BuildTrayMenu();
+        if (previous is not null) Post(previous.Dispose);
     }
 
     private void ApplyInteractionSettings()
@@ -561,6 +592,35 @@ internal sealed class TrayApp : ApplicationContext
 
     /// <summary>Test hook for <c>--uipreview</c>: ends the simulated batch so the fade runs.</summary>
     internal void EndPreviewBusyForTest() => _wheel.EndBusy();
+
+    /// <summary>Test hook: is the floating icon on screen right now?</summary>
+    internal bool DropTargetVisibleForTest => _dropTarget is { Visible: true };
+
+    /// <summary>
+    /// Test hook: opens the floating icon's own menu and clicks "Hide this icon" — the exact path
+    /// that used to fault, because that handler disposes the window the menu came from and the
+    /// menu disposes itself as it closes. Returns false if the menu lost its Hide item.
+    /// </summary>
+    internal bool ExerciseDropTargetMenuForTest()
+    {
+        SetDropTargetVisible(true);
+        if (_dropTarget is null) return false;
+
+        var menu = BuildDropTargetMenu();
+        var hide = menu.Items.OfType<ToolStripMenuItem>().FirstOrDefault(i => i.Text == "Hide this icon");
+        if (hide is null)
+        {
+            menu.Dispose();
+            return false;
+        }
+
+        menu.Closed += (_, _) => Post(menu.Dispose);
+        menu.Show(NativeMethods.CursorPosition());
+        hide.PerformClick();
+        menu.Close();
+
+        return true;
+    }
 
     /// <summary>
     /// Test hook: runs one real conversion through the same code path the wheel uses, so the
