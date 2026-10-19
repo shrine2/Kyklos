@@ -130,7 +130,7 @@ public static class Converter
 
         try
         {
-            if (NeedsWicDecode(source))
+            if (WicImage.NeedsDecode(source))
             {
                 var tempDir = Paths.NewTempDir();
                 temporary = Path.Combine(tempDir, "decoded.png");
@@ -181,15 +181,6 @@ public static class Converter
             if (temporary is not null) Paths.TryDeleteTree(Path.GetDirectoryName(temporary));
         }
     }
-
-    /// <summary>Formats ffmpeg cannot decode on this build are routed through the Windows codec first.</summary>
-    private static bool NeedsWicDecode(string path) => Path.GetExtension(path).ToLowerInvariant() switch
-    {
-        ".heic" or ".heif" => !Toolchain.Caps.HasDecoder("heif", "heic"),
-        ".jxl" => !Toolchain.Caps.HasDecoder("jxl", "libjxl"),
-        ".avif" => !Toolchain.Caps.HasDecoder("av1"),
-        _ => false,
-    };
 
     private static string Summarise(string stderr)
     {

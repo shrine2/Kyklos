@@ -74,8 +74,13 @@ Output: **PDF, TXT, DOCX, ODT, EPUB, HTML, RTF** — *requires LibreOffice (see 
 Subtitles and tables are done inside the app, so they still work when ffmpeg and LibreOffice
 are both missing.
 
-\* HEIC output needs the Microsoft Store **HEIF Image Extensions** package. Without it, HEIC
-is greyed out with that reason.
+\* HEIC goes through the Windows Imaging Component (WIC), reached via WinRT — ffmpeg's build
+has no libheif. Output needs the Microsoft Store **HEIF Image Extensions** package; without it
+the HEIC wedge is greyed out and says why, and other formats stay unaffected. WIC is also what
+decodes a HEIC **input**. The check is a real one-pixel encode, so it reflects the machine
+rather than the presence of a package. Note that GDI+ (`System.Drawing`) cannot see WIC codecs
+at all — asking it about HEIC reports "no codec" even when the codec is installed and working —
+so this path deliberately avoids it.
 
 Every target is checked against a live capability probe of the local `ffmpeg` at startup, so
 the wheel only ever shows things this machine can actually produce. A file's own format is

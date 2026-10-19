@@ -39,28 +39,45 @@ public static class PdfTools
 
     private static PageImage EncodeJpeg(string path)
     {
-        using var memory = new MemoryStream(File.ReadAllBytes(path));
-        using var source = Image.FromStream(memory, useEmbeddedColorManagement: true, validateImageData: false);
-
-        // Flatten onto white: PDF DCTDecode streams are DeviceRGB, so alpha must be resolved.
-        using var flattened = new Bitmap(source.Width, source.Height, PixelFormat.Format24bppRgb);
-        using (var graphics = Graphics.FromImage(flattened))
+        // HEIC and friends cannot be read by GDI+ at all, so Windows decodes them first.
+        string? decoded = null;
+        try
         {
-            graphics.Clear(Color.White);
-            graphics.DrawImage(source, new Rectangle(0, 0, source.Width, source.Height));
+            var input = path;
+            if (WicImage.NeedsDecode(path))
+            {
+                decoded = Path.Combine(Paths.NewTempDir(), "decoded.png");
+                WicImage.Convert(path, decoded, "png");
+                input = decoded;
+            }
+
+            using var memory = new MemoryStream(File.ReadAllBytes(input));
+            using var source = Image.FromStream(memory, useEmbeddedColorManagement: true, validateImageData: false);
+
+            // Flatten onto white: PDF DCTDecode streams are DeviceRGB, so alpha must be resolved.
+            using var flattened = new Bitmap(source.Width, source.Height, PixelFormat.Format24bppRgb);
+            using (var graphics = Graphics.FromImage(flattened))
+            {
+                graphics.Clear(Color.White);
+                graphics.DrawImage(source, new Rectangle(0, 0, source.Width, source.Height));
+            }
+
+            var codec = ImageCodecInfo.GetImageEncoders().FirstOrDefault(c => c.FormatID == ImageFormat.Jpeg.Guid)
+                        ?? throw new InvalidOperationException("No JPEG encoder is available on this system.");
+
+            using var output = new MemoryStream();
+            using (var parameters = new EncoderParameters(1))
+            {
+                parameters.Param[0] = new EncoderParameter(Encoder.Quality, 92L);
+                flattened.Save(output, codec, parameters);
+            }
+
+            return new PageImage(output.ToArray(), flattened.Width, flattened.Height);
         }
-
-        var codec = ImageCodecInfo.GetImageEncoders().FirstOrDefault(c => c.FormatID == ImageFormat.Jpeg.Guid)
-                    ?? throw new InvalidOperationException("No JPEG encoder is available on this system.");
-
-        using var output = new MemoryStream();
-        using (var parameters = new EncoderParameters(1))
+        finally
         {
-            parameters.Param[0] = new EncoderParameter(Encoder.Quality, 92L);
-            flattened.Save(output, codec, parameters);
+            if (decoded is not null) Paths.TryDeleteTree(Path.GetDirectoryName(decoded));
         }
-
-        return new PageImage(output.ToArray(), flattened.Width, flattened.Height);
     }
 
     private static void WritePdf(IReadOnlyList<PageImage> pages, string outputPath)

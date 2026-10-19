@@ -133,6 +133,20 @@ internal static class SelfTest
                     settings, CancellationToken.None);
                 if (compressed.Success) Line($"PASS  png -> jpg (compress+resize)      {Path.GetFileName(compressed.Output)}  {Paths.HumanSize(compressed.Bytes)}");
                 else { failures++; Line($"FAIL  png -> jpg (compress+resize)      {compressed.Error}"); }
+
+                // HEIC as an *input* leans on the Windows codec rather than ffmpeg, and
+                // exercises two different consumers of the decoded image.
+                var heicPath = Path.Combine(dir, "sample-image.heic");
+                if (File.Exists(heicPath))
+                {
+                    await Check("heic -> jpg", heicPath, "jpg");
+                    await Check("heic -> pdf", heicPath, "pdf");
+                }
+                else
+                {
+                    failures++;
+                    Line($"FAIL  heic -> jpg                       png -> heic produced no file");
+                }
             }
         }
 
