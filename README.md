@@ -27,7 +27,15 @@ Three ways to get the wheel:
 
 The drag trigger is configurable (`Ctrl+Shift`, `Alt+Shift`, `Shift`, `Alt`) because plain
 *Shift*+drag in Explorer means "move". The hotkey is configurable too, and both live in
-**Settings**.
+**Settings**. A single balloon on the very first launch explains all of this, and never shows
+again.
+
+## Demo
+
+Twelve seconds of the whole idea: the drag trigger opens the wheel mid-drag, a wedge converts
+the file in place, and it repeats for a document source.
+
+![Screen recording: dragging a file with Ctrl+Alt held opens the wheel of formats under the cursor; picking a wedge converts the file in place](docs/showcase.mp4)
 
 ## While it converts
 
@@ -115,11 +123,24 @@ never offered as a target, so the ring always means something.
 # develop
 dotnet build "src\Kyklos\Kyklos.csproj"
 & "src\Kyklos\bin\Debug\net9.0-windows10.0.19041.0\Kyklos.exe"
+```
 
+Or take the whole step at once with `publish.ps1` — closing the running tray, publishing the
+compressed build, refreshing the login entry and the **Send To** shortcut against the fresh exe,
+and starting it again:
+
+```powershell
+.\publish.ps1        # -NoStart to publish without starting the tray
+```
+
+The manual equivalent of that one command is:
+
+```powershell
 # one self-contained exe (~54 MB, no runtime required)
 dotnet publish "src\Kyklos\Kyklos.csproj" -c Release -r win-x64 `
   --self-contained true -p:PublishSingleFile=true `
   -p:IncludeNativeLibrariesForSelfExtract=true `
+  -p:EnableCompressionInSingleFile=true `
   -o "$env:LOCALAPPDATA\Programs\Kyklos"
 ```
 
