@@ -24,11 +24,17 @@ jobs:
       - name: Self-test
         shell: pwsh
         run: |
-          $exe  = "src/Kyklos/bin/Release/net9.0-windows10.0.19041.0/Kyklos.exe"
-          $dir  = Join-Path $env:RUNNER_TEMP "selftest"
-          & $exe --selftest $dir all
+          $exe = "src/Kyklos/bin/Release/net9.0-windows10.0.19041.0/Kyklos.exe"
+          $dir = Join-Path $env:RUNNER_TEMP "selftest"
+          & $exe --selftest $dir all 2>&1 | Set-Content (Join-Path $env:RUNNER_TEMP "selftest-output.txt")
+          "selftest exit code: $LASTEXITCODE"
           if ($LASTEXITCODE -ne 0) {
-              Get-Content (Join-Path $dir "selftest-report.txt") | ForEach-Object { "::error::$_" }
+              "--- crash.log, if any ---"
+              Get-Content (Join-Path (Split-Path $exe) "crash.log") -ErrorAction SilentlyContinue
+              "--- app output ---"
+              Get-Content (Join-Path $env:RUNNER_TEMP "selftest-output.txt") -ErrorAction SilentlyContinue
+              "--- report ---"
+              Get-Content (Join-Path $dir "selftest-report.txt") -ErrorAction SilentlyContinue
               exit $LASTEXITCODE
           }
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Self-test"
