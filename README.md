@@ -40,6 +40,22 @@ compressed WebP render. The full-quality recording is [`docs/showcase.mp4`](docs
 
 ![The wheel of formats opening under the cursor mid-drag; picking a wedge converts the file in place](docs/showcase-loop.webp)
 
+## Download
+
+No SDK needed to use Kyklos. Grab the zip from the
+[latest release](https://github.com/shrine2/Kyklos/releases/latest), unpack it anywhere, and
+double-click **Install.cmd**. That copies the exe to the per-user install folder, sets up
+starting at login and the **Send to** entry, and starts the tray — no admin rights.
+
+Because it carries no code-signing certificate, first run may be greeted by
+*Windows protected your PC* — choose **More info → Run anyway**.
+
+The exe is self-contained and converts images and PDFs on its own. Everything else is priced
+in honestly until its tool is installed: video and audio formats appear with
+`winget install Gyan.FFmpeg`, Office documents with
+`winget install TheDocumentFoundation.LibreOffice`. `Install.ps1` in the zip reports exactly
+which of these apply at the end of an install.
+
 ## While it converts
 
 The wheel is the progress display. Once you commit a format, the hub turns into a rotating
