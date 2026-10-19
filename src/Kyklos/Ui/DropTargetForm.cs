@@ -118,7 +118,7 @@ internal sealed class DropTargetForm : LayeredForm
         e.Effect = files.Length == 0 ? DragDropEffects.None : DragDropEffects.Copy;
         if (files.Length == 0) return;
 
-        // The wheel opens at the drop point, matching Tangerine's "convert where you are" idea.
+        // The wheel opens at the drop point: convert where you are, no import step.
         FilesDropped?.Invoke(files, new Point(Left + e.X, Top + e.Y));
     }
 

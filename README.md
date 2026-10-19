@@ -1,12 +1,13 @@
 # Kyklos for Windows
 
-A Windows take on Tangerine — grab a file, get a radial
-wheel of formats, pick one, done. Conversions happen in place; there is no import step, no
-project file, no window to clean up afterwards.
+Kyklos for Windows
 
-The original is a macOS/Apple-silicon app called Tangerine. This is a native Windows rebuild,
-under its own name: C# / .NET 9, WinForms, a real tray application, no Electron and no runtime
-to install.
+Grab a file, get a radial wheel of formats right under the cursor, pick one, done.
+Conversions happen in place; there is no import step, no project file, no window to clean up
+afterwards.
+
+It is a native Windows app: C# / .NET 9, WinForms, a real tray application — no Electron and
+no runtime to install.
 
 ---
 
@@ -113,16 +114,16 @@ Every target is checked against a live capability probe of the local `ffmpeg` at
 the wheel only ever shows things this machine can actually produce. A file's own format is
 never offered as a target, so the ring always means something.
 
-### Tools, in place of the macOS frameworks
+### Tools behind the wheel
 
-| Job | macOS original | This build |
-| --- | --- | --- |
-| Audio/video | AVFoundation | `ffmpeg` |
-| Images | ImageIO | `ffmpeg`, with Windows WIC for HEIC/AVIF/JXL |
-| Images → PDF | PDFKit | hand-rolled JPEG/DCTDecode PDF writer |
-| PDF → images | PDFKit | WinRT `Windows.Data.Pdf` |
-| PDF → text | PDFKit | PdfPig |
-| Office / EPUB | `textutil` | headless LibreOffice (`soffice`) |
+| Job | Kyklos drives |
+| --- | --- |
+| Audio / video | `ffmpeg` |
+| Images | `ffmpeg`, with Windows WIC for HEIC/AVIF/JXL |
+| Images → PDF | hand-rolled JPEG/DCTDecode PDF writer |
+| PDF → images | WinRT `Windows.Data.Pdf` |
+| PDF → text | PdfPig |
+| Office / EPUB | headless LibreOffice (`soffice`) |
 
 ## Requirements
 
@@ -312,33 +313,27 @@ and then ends the process without running driver detach, which is safe here beca
 is already on disk. It is the difference between the self-test reporting `ALL CHECKS PASSED`
 and the same run reporting an `0xC0000005`.
 
-## Compared with the Mac original
+## The wheel by design
 
-The wheel geometry was matched against Leap Studio's own press screenshots of Tangerine 1.4
-(the macOS build is App Store only, and needs macOS 13+ on Apple silicon, so there is no
-binary to inspect here — the vendor's published spec and press images are the evidence):
-
-- The first format is centred on 12 o'clock and the ring runs clockwise: JPG, PNG, WebP,
+- The first format sits centred on 12 o'clock and the ring runs clockwise: JPG, PNG, WebP,
   HEIC, TIFF, AVIF, BMP, then PDF.
-- A file's own format never appears on its own ring.
-- The hub carries the size of the selection (macOS shows `2.2 MB`; this shows the same pill).
-- Tool wedges are uppercase words only, as in the original: COMPRESS, RESIZE, NO META, PDF. A
-  tool that is switched on is tinted rather than marked with a symbol.
+- A file's own format never appears on its own ring, so the choices always mean something.
+- The hub carries the size of the selection as a small pill (`2.2 MB`).
+- Tool wedges are uppercase words only: COMPRESS, RESIZE, NO META, PDF. A tool that is
+  switched on is tinted rather than marked with a symbol.
 
-Known differences, deliberately:
+## Known limits
 
-- **No AirDrop.** The macOS *Control* wheel is file actions (AirDrop, Float, Copy, Move, Copy
-  Path, Terminal). There is no Windows equivalent of AirDrop, and the rest are Explorer's job.
-- **Tools share the wheel** with formats instead of living on a separate Option/Command ring.
-- **No macOS-only targets.** Pages, Numbers and Key documents, and PDF→PAGES/PPTX/XLSX, have
+- **No file-actions wheel.** Copy, move and share are Explorer's job; the Send To menu covers
+  the same ground, and there is no Windows answer to peer-to-peer airdrops.
+- **Tools share the wheel** with formats instead of living on a separate options ring.
+- **No Apple office formats.** Pages, Numbers and Key documents, and PDF→PAGES/PPTX/XLSX, have
   no Windows converter.
-- **Image → DOCX.** The macOS image wheel offers it; LibreOffice refuses `--convert-to docx`
-  for a picture ("no export filter", it opens images in Draw), so it would need a hand-written
-  OOXML writer.
-- **Archives were out of scope** by choice — ZIP/TAR/GZIP are absent rather than half-done.
+- **No image → DOCX.** LibreOffice refuses `--convert-to docx` for a picture ("no export
+  filter", it opens images in Draw), so it would need a hand-written OOXML writer.
+- **No archives** by choice — ZIP/TAR/GZIP are absent rather than half-done.
 
-Everything else on the original's format list is present, and the Windows build adds targets
-the original does not have: MP4→M4A/WAV/FLAC audio extraction, and WebP/AVIF/TIFF/BMP→GIF.
+Targets that are easy to miss: MP4→M4A/WAV/FLAC audio extraction, and WebP/AVIF/TIFF/BMP→GIF.
 
 ---
 

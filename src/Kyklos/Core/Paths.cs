@@ -4,7 +4,7 @@ namespace Kyklos.Core;
 public static class Paths
 {
     /// <summary>
-    /// Resolves where a converted file should go, mirroring Tangerine's "save beside the original" behaviour.
+    /// Resolves where a converted file should go: beside the source, unless redirected.
     /// Returns ShouldSkip=true when the overwrite policy is Skip and the target already exists.
     /// </summary>
     public static (string Path, bool ShouldSkip) ResolveOutput(string sourcePath, string targetExt, Settings settings)
