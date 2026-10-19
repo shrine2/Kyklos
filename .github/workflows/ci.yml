@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Build
+        run: dotnet build src/Kyklos/Kyklos.csproj -c Release
+
+      - name: Self-test
+        shell: pwsh
+        run: |
+          $exe  = "src/Kyklos/bin/Release/net9.0-windows10.0.19041.0/Kyklos.exe"
+          $dir  = Join-Path $env:RUNNER_TEMP "selftest"
+          & $exe --selftest $dir all
+          if ($LASTEXITCODE -ne 0) {
+              Get-Content (Join-Path $dir "selftest-report.txt") | ForEach-Object { "::error::$_" }
+              exit $LASTEXITCODE
+          }
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Self-test"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value (Get-Content -Raw (Join-Path $dir "selftest-report.txt") -ErrorAction SilentlyContinue)

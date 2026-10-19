@@ -1,6 +1,8 @@
 # Kyklos for Windows
 
-Kyklos for Windows
+[![CI](https://github.com/shrine2/Kyklos/actions/workflows/ci.yml/badge.svg)](https://github.com/shrine2/Kyklos/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/shrine2/Kyklos)](https://github.com/shrine2/Kyklos/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-3776AB)](LICENSE)
 
 Grab a file, get a radial wheel of formats right under the cursor, pick one, done.
 Conversions happen in place; there is no import step, no project file, no window to clean up
@@ -340,4 +342,5 @@ Targets that are easy to miss: MP4→M4A/WAV/FLAC audio extraction, and WebP/AVI
 ## License
 
 MIT — use it, learn from it, change it, ship it in your own repo; the only obligation is the
-copyright notice. See [LICENSE](LICENSE).
+copyright notice. See [LICENSE](LICENSE) · [Changelog](CHANGELOG.md) ·
+[Contributing](CONTRIBUTING.md) · [Third-party notices](THIRD-PARTY-NOTICES.md).
