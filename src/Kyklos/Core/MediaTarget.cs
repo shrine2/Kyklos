@@ -91,7 +91,7 @@ public sealed class MediaTarget
     public string? UnavailableReason { get; set; }
 }
 
-public sealed record ToolItem(ToolId Id, string Label, bool Toggle, bool Active);
+public sealed record ToolItem(ToolId Id, string Label, bool Toggle, bool Active, string Hint = "");
 
 /// <summary>Helpers shared by every ffmpeg argument builder.</summary>
 internal static class FfArgs

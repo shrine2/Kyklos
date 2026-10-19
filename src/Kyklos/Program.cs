@@ -63,8 +63,8 @@ internal static class Program
 
         if (args.Any(a => a.Equals("--uipreview", StringComparison.OrdinalIgnoreCase)))
         {
-            // Diagnostic: opens the wheel and drives it through a simulated batch so the
-            // running state (spinner hub, caption, fade-out) can be looked at or screenshotted
+            // Diagnostic: opens the wheel and walks it through idle, running and fade so the
+            // wedges, the spinner hub and the caption can all be looked at or screenshotted
             // without converting anything. Deliberately ahead of the single-instance check —
             // previewing alongside a running tray is the whole point, and it must never be
             // mistaken for a file hand-off.
@@ -75,15 +75,22 @@ internal static class Program
             previewTimer.Tick += (_, _) =>
             {
                 phase++;
-                if (phase == 1)
+                switch (phase)
                 {
-                    // End the simulated batch so the fade-out is part of the preview too.
-                    preview.EndPreviewBusyForTest();
-                    return;
-                }
+                    case 1:
+                        preview.BeginPreviewBusyForTest();
+                        return;
 
-                previewTimer.Stop();
-                preview.ShutdownForTest();
+                    case 2:
+                        // End the simulated batch so the fade-out is part of the preview too.
+                        preview.EndPreviewBusyForTest();
+                        return;
+
+                    default:
+                        previewTimer.Stop();
+                        preview.ShutdownForTest();
+                        return;
+                }
             };
             previewTimer.Start();
             Application.Run(preview);

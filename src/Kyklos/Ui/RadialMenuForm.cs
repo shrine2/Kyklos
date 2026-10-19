@@ -520,7 +520,8 @@ internal sealed class RadialMenuForm : LayeredForm
             index => _tools[index].Label,
             _ => true,
             isToolRing: true,
-            labelSize: _radius * 0.082f);
+            labelSize: _radius * 0.082f,
+            switchedOn: index => _tools[index].Toggle && _tools[index].Active);
 
         DrawDwellProgress(g, cx, cy);
 
@@ -547,7 +548,8 @@ internal sealed class RadialMenuForm : LayeredForm
 
     private void DrawRing(
         Graphics g, float cx, float cy, float innerRadius, float outerRadius, int count, int hovered,
-        Func<int, string> label, Func<int, bool> enabled, bool isToolRing, float labelSize)
+        Func<int, string> label, Func<int, bool> enabled, bool isToolRing, float labelSize,
+        Func<int, bool>? switchedOn = null)
     {
         if (count == 0) return;
 
@@ -564,6 +566,17 @@ internal sealed class RadialMenuForm : LayeredForm
             {
                 using var highlight = new LinearGradientBrush(bounds, Theme.AccentSoft, Theme.Accent, 70f);
                 g.FillPath(highlight, path);
+            }
+            else if (switchedOn is not null && switchedOn(i))
+            {
+                // A tool that is switched on is tinted rather than flagged with a symbol, so the
+                // wedges stay readable as plain words.
+                using var tint = new LinearGradientBrush(
+                    bounds,
+                    Color.FromArgb(140, Theme.AccentSoft),
+                    Color.FromArgb(155, Theme.Accent),
+                    70f);
+                g.FillPath(tint, path);
             }
             else
             {
@@ -588,7 +601,8 @@ internal sealed class RadialMenuForm : LayeredForm
             var chord = 2f * middleRadius * MathF.Sin(sweep * MathF.PI / 360f) * 0.84f;
             using var font = FitFont(g, text, labelSize, chord);
 
-            var color = !enabled(i) ? Theme.Dim : (i == hovered ? Color.White : Theme.Text);
+            var lit = i == hovered || (switchedOn is not null && switchedOn(i));
+            var color = !enabled(i) ? Theme.Dim : (lit ? Color.White : Theme.Text);
             Theme.DrawShadowed(g, text, font, color, point);
         }
     }
@@ -726,21 +740,27 @@ internal sealed class RadialMenuForm : LayeredForm
         if (_hoverTarget >= 0 && _hoverTarget < _targets.Count)
         {
             var target = _targets[_hoverTarget];
-            if (!target.Available) return $"{target.Label} — {target.UnavailableReason}";
-            return target.Hint is { Length: > 0 } hint ? $"{target.Label} · {hint}" : target.Label;
+            if (!target.Available) return $"{target.Label} (unavailable, {target.UnavailableReason})";
+            return target.Hint is { Length: > 0 } hint ? $"{target.Label} ({hint})" : target.Label;
         }
 
         if (_hoverTool >= 0 && _hoverTool < _tools.Count)
         {
             var tool = _tools[_hoverTool];
-            return tool.Toggle
-                ? (Interactive ? $"{tool.Label.Replace(" ✓", "")} (click to toggle)" : $"{tool.Label.Replace(" ✓", "")} (hold to toggle)")
-                : tool.Label.Replace(" ✓", "");
+            if (tool.Toggle)
+            {
+                var state = tool.Active ? "on, " : string.Empty;
+                return Interactive
+                    ? $"{tool.Label} ({state}click to toggle)"
+                    : $"{tool.Label} ({state}hold to toggle)";
+            }
+
+            return tool.Hint is { Length: > 0 } hint ? $"{tool.Label} ({hint})" : tool.Label;
         }
 
         if (_hoverHub) return Interactive ? "Cancel" : "Release here to cancel";
 
-        return Interactive ? _caption : $"{_caption} — release on a format";
+        return Interactive ? _caption : $"{_caption} (release on a format)";
     }
 
     /// <summary>
@@ -768,7 +788,7 @@ internal sealed class RadialMenuForm : LayeredForm
         MediaKind.Document => "DOC",
         MediaKind.Subtitle => "SUB",
         MediaKind.Delimited => "TBL",
-        _ => "•••",
+        _ => "FILE",
     };
 
     private static Font FitFont(Graphics g, string text, float preferredSize, float maxWidth)

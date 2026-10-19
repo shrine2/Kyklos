@@ -112,24 +112,24 @@ public static class FormatCatalog
         switch (source)
         {
             case MediaKind.Video:
-                tools.Add(new ToolItem(ToolId.Compress, options.Compress ? "COMPRESS ✓" : "COMPRESS", true, options.Compress));
-                tools.Add(new ToolItem(ToolId.TrimResize, options.HasTrim || options.ResizeWidth is not null ? "TRIM/SIZE ✓" : "TRIM/SIZE", false, options.HasTrim || options.ResizeWidth is not null));
-                tools.Add(new ToolItem(ToolId.StripMetadata, options.StripMetadata ? "NO META ✓" : "NO META", true, options.StripMetadata));
-                tools.Add(new ToolItem(ToolId.ExtractAudio, "→ MP3", false, false));
-                tools.Add(new ToolItem(ToolId.MakeGif, "→ GIF", false, false));
+                tools.Add(new ToolItem(ToolId.Compress, "COMPRESS", true, options.Compress));
+                tools.Add(new ToolItem(ToolId.TrimResize, "TRIM/SIZE", false, options.HasTrim || options.ResizeWidth is not null));
+                tools.Add(new ToolItem(ToolId.StripMetadata, "NO META", true, options.StripMetadata));
+                tools.Add(new ToolItem(ToolId.ExtractAudio, "MP3", false, false, "save the audio track"));
+                tools.Add(new ToolItem(ToolId.MakeGif, "GIF", false, false, "make an animated GIF"));
                 break;
 
             case MediaKind.Audio:
-                tools.Add(new ToolItem(ToolId.Compress, options.Compress ? "COMPRESS ✓" : "COMPRESS", true, options.Compress));
-                tools.Add(new ToolItem(ToolId.TrimResize, options.HasTrim ? "TRIM ✓" : "TRIM", false, options.HasTrim));
-                tools.Add(new ToolItem(ToolId.StripMetadata, options.StripMetadata ? "NO META ✓" : "NO META", true, options.StripMetadata));
+                tools.Add(new ToolItem(ToolId.Compress, "COMPRESS", true, options.Compress));
+                tools.Add(new ToolItem(ToolId.TrimResize, "TRIM", false, options.HasTrim));
+                tools.Add(new ToolItem(ToolId.StripMetadata, "NO META", true, options.StripMetadata));
                 break;
 
             case MediaKind.Image:
-                tools.Add(new ToolItem(ToolId.Compress, options.Compress ? "COMPRESS ✓" : "COMPRESS", true, options.Compress));
-                tools.Add(new ToolItem(ToolId.TrimResize, options.ResizeWidth is not null ? "RESIZE ✓" : "RESIZE", false, options.ResizeWidth is not null));
-                tools.Add(new ToolItem(ToolId.StripMetadata, options.StripMetadata ? "NO META ✓" : "NO META", true, options.StripMetadata));
-                tools.Add(new ToolItem(ToolId.ToPdf, "→ PDF", false, false));
+                tools.Add(new ToolItem(ToolId.Compress, "COMPRESS", true, options.Compress));
+                tools.Add(new ToolItem(ToolId.TrimResize, "RESIZE", false, options.ResizeWidth is not null));
+                tools.Add(new ToolItem(ToolId.StripMetadata, "NO META", true, options.StripMetadata));
+                tools.Add(new ToolItem(ToolId.ToPdf, "PDF", false, false, "make a PDF"));
                 break;
         }
 
@@ -352,7 +352,7 @@ public static class FormatCatalog
         new MediaTarget
         {
             Ext = "pdf", Label = "PDF", Output = MediaKind.Pdf, Source = MediaKind.Image,
-            NeedsPdfWrite = true, Hint = "image → PDF",
+            NeedsPdfWrite = true, Hint = "images to PDF",
         },
         new MediaTarget
         {

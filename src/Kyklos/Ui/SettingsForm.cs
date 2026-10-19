@@ -79,7 +79,9 @@ internal sealed class SettingsForm : Form
         _hotkey.Width = 160;
         _hotkey.DropDownStyle = ComboBoxStyle.DropDown;
         _showDropTarget = Dark.Check("Show the floating drop target on the desktop", settings.ShowDropTarget);
-        _startup = Dark.Check("Start Kyklos when Windows starts", settings.StartWithWindows);
+        // Read the registry rather than the stored flag: they can disagree if the write was
+        // blocked by policy, and the checkbox should show what Windows will actually do.
+        _startup = Dark.Check("Start Kyklos when Windows starts", ShellIntegration.IsStartupEnabled());
         _sendToButton = Dark.Secondary(ShellIntegration.SendToInstalled ? "Remove" : "Install");
         _sendToButton.Width = 130;
         _sendToButton.Click += (_, _) => ToggleSendTo();
@@ -210,7 +212,7 @@ internal sealed class SettingsForm : Form
              "Explorer's move-on-drop, which is why Ctrl+Alt is the default.");
 
         Section("Explorer integration");
-        Field("Right-click → Send to", Dark.Label(ShellIntegration.SendToInstalled ? "Convert with Kyklos (installed)" : "not installed"), _sendToButton);
+        Field("Explorer Send to", Dark.Label(ShellIntegration.SendToInstalled ? "Convert with Kyklos (installed)" : "not installed"), _sendToButton);
 
         scroll.Controls.Add(layout);
 

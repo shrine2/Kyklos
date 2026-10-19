@@ -519,7 +519,7 @@ internal sealed class TrayApp : ApplicationContext
     {
         var ffmpeg = Toolchain.FfmpegReady ? $"ffmpeg ok ({Toolchain.Caps.Encoders.Count} encoders)" : "ffmpeg missing";
         var office = Toolchain.OfficeReady ? "LibreOffice ok" : "LibreOffice missing";
-        _statusItem.Text = $"{ffmpeg} · {office}";
+        _statusItem.Text = $"{ffmpeg}, {office}";
 
         _tray.Text = Toolchain.FfmpegReady
             ? "Kyklos — ready"
@@ -571,8 +571,8 @@ internal sealed class TrayApp : ApplicationContext
     internal void ShutdownForTest() => ExitApplication();
 
     /// <summary>
-    /// Test hook for <c>--uipreview</c>: opens the wheel for a sample file and pushes it into
-    /// the running state, so the spinner hub and caption can be inspected without a real job.
+    /// Test hook for <c>--uipreview</c>: opens the wheel on a sample file in its idle interactive
+    /// state, so the wedges and their labels can be inspected without converting anything.
     /// </summary>
     internal void ShowWheelPreviewForTest(string? sample)
     {
@@ -585,7 +585,11 @@ internal sealed class TrayApp : ApplicationContext
 
         _wheel.Configure(_pendingKind, _pending, _options);
         _wheel.ShowWheel(_wheelAnchor, interactive: true);
+    }
 
+    /// <summary>Test hook for <c>--uipreview</c>: switches the preview into its running state.</summary>
+    internal void BeginPreviewBusyForTest()
+    {
         _wheel.BeginBusy("Converting 4 files to WEBP");
         _wheel.UpdateBusy("Converting 3 / 12", "holiday-lisbon-raw-shot.png");
     }
