@@ -76,8 +76,16 @@ public sealed class Settings
         return new Settings();
     }
 
+    /// <summary>
+    /// Set by the diagnostic switches. A smoke test drives the real UI, which includes switches
+    /// that save; running a test must not rewrite the user's configuration on the way through.
+    /// </summary>
+    public static bool SuppressSave { get; set; }
+
     public void Save()
     {
+        if (SuppressSave) return;
+
         try
         {
             Directory.CreateDirectory(DirPath);

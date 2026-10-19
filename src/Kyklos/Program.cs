@@ -27,10 +27,13 @@ internal static class Program
         Application.ThreadException += (_, e) => ReportRecoverable(e.Exception);
 
         // The diagnostic switches must never block on a dialog — a modal box would hang a
-        // headless run forever. They record faults and fail on them instead.
+        // headless run forever. They record faults and fail on them instead. They also must not
+        // write settings: the smoke test clicks through switches that save, and a test run has no
+        // business rewriting the user's configuration.
         _quiet = args.Any(a => a.Equals("--selftest", StringComparison.OrdinalIgnoreCase)
                                || a.Equals("--smoketest", StringComparison.OrdinalIgnoreCase)
                                || a.Equals("--uipreview", StringComparison.OrdinalIgnoreCase));
+        Settings.SuppressSave = _quiet;
 
         ApplicationConfiguration.Initialize();
 
