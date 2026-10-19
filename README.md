@@ -35,7 +35,10 @@ again.
 Twelve seconds of the whole idea: the drag trigger opens the wheel mid-drag, a wedge converts
 the file in place, and it repeats for a document source.
 
-![Screen recording: dragging a file with Ctrl+Alt held opens the wheel of formats under the cursor; picking a wedge converts the file in place](docs/showcase.mp4)
+GitHub READMEs only autoplay video uploaded through GitHub itself, so the inline loop below is a
+compressed WebP render. The full-quality recording is [`docs/showcase.mp4`](docs/showcase.mp4).
+
+![The wheel of formats opening under the cursor mid-drag; picking a wedge converts the file in place](docs/showcase-loop.webp)
 
 ## While it converts
 
