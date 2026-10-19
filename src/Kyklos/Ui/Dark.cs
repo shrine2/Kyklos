@@ -109,5 +109,9 @@ internal static class Dark
         form.MinimizeBox = false;
         form.StartPosition = FormStartPosition.CenterScreen;
         form.ShowInTaskbar = true;
+
+        // ShowInTaskbar is on, so the taskbar and Alt-Tab need the mark too. Drawn here rather
+        // than read back from the .ico, which keeps the dialogs independent of the icon file.
+        form.Icon = Branding.IconFor(32);
     }
 }

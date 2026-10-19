@@ -10,6 +10,16 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>Kyklos</RootNamespace>
     <AssemblyName>Kyklos</AssemblyName>
+    <ApplicationIcon>Resources\Kyklos.ico</ApplicationIcon>
+
+    <!-- Shown by Explorer, the taskbar, Alt-Tab and the file properties dialog.
+         Product/AssemblyTitle default to AssemblyName; the rest would otherwise be blank. -->
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <Product>Kyklos</Product>
+    <AssemblyTitle>Kyklos</AssemblyTitle>
+    <Description>Drag a file onto the wheel, pick a format, convert it in place.</Description>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationVisualStyles>true</ApplicationVisualStyles>
     <ApplicationUseCompatibleTextRendering>false</ApplicationUseCompatibleTextRendering>

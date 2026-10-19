@@ -1,5 +1,7 @@
+using System.Drawing.Imaging;
 using Kyklos.Core;
 using Kyklos.Interop;
+using Kyklos.Ui;
 
 namespace Kyklos;
 
@@ -32,10 +34,50 @@ internal static class Program
         // business rewriting the user's configuration.
         _quiet = args.Any(a => a.Equals("--selftest", StringComparison.OrdinalIgnoreCase)
                                || a.Equals("--smoketest", StringComparison.OrdinalIgnoreCase)
-                               || a.Equals("--uipreview", StringComparison.OrdinalIgnoreCase));
+                               || a.Equals("--uipreview", StringComparison.OrdinalIgnoreCase)
+                               || a.Equals("--writeicon", StringComparison.OrdinalIgnoreCase));
         Settings.SuppressSave = _quiet;
 
         ApplicationConfiguration.Initialize();
+
+        // Renders the .ico that is committed under Resources/ and embedded in the executable.
+        // It needs neither the toolchain nor the tray, so it runs before either is touched, and
+        // it keeps the mark reproducible from source instead of a binary of unknown origin.
+        if (args.Any(a => a.Equals("--writeicon", StringComparison.OrdinalIgnoreCase)))
+        {
+            var target = args.SkipWhile(a => !a.Equals("--writeicon", StringComparison.OrdinalIgnoreCase))
+                .Skip(1)
+                .FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal));
+
+            if (target is null)
+            {
+                Console.Error.WriteLine("--writeicon needs a destination: Kyklos.exe --writeicon <path.ico>");
+                NativeMethods.HardExit(98);
+                return;
+            }
+
+            try
+            {
+                Branding.WriteIco(target, Branding.IconSizes);
+
+                // A PNG beside the icon, so the mark can be looked at without opening Explorer.
+                var preview = Path.Combine(
+                    Path.GetDirectoryName(Path.GetFullPath(target))!,
+                    Path.GetFileNameWithoutExtension(target) + "-256.png");
+                using (var bitmap = Branding.Render(256)) bitmap.Save(preview, ImageFormat.Png);
+
+                Console.WriteLine($"wrote {target}");
+                Console.WriteLine($"wrote {preview}");
+                NativeMethods.HardExit(0);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"--writeicon failed: {ex.Message}");
+                NativeMethods.HardExit(97);
+            }
+
+            return;
+        }
 
         var files = ExtractFiles(args);
         var settings = Settings.Load();
