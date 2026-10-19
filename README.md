@@ -339,3 +339,10 @@ Known differences, deliberately:
 
 Everything else on the original's format list is present, and the Windows build adds targets
 the original does not have: MP4→M4A/WAV/FLAC audio extraction, and WebP/AVIF/TIFF/BMP→GIF.
+
+---
+
+## License
+
+MIT — use it, learn from it, change it, ship it in your own repo; the only obligation is the
+copyright notice. See [LICENSE](LICENSE).
