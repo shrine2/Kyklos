@@ -12,6 +12,12 @@ internal static class Program
     /// <summary>Set by the diagnostic switches so a fault is recorded rather than shown in a dialog.</summary>
     private static bool _quiet;
 
+    /// <summary>
+    /// True while a diagnostic switch owns the process. User-facing extras that only make sense
+    /// for a real run — first-run hints, error dialogs — are skipped for a diagnostic run.
+    /// </summary>
+    internal static bool Quiet => _quiet;
+
     private static int _uiFaults;
 
     /// <summary>UI-thread exceptions seen so far; the smoke test treats any as a failure.</summary>

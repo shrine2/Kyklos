@@ -67,6 +67,7 @@ internal sealed class TrayApp : ApplicationContext
         ApplyInteractionSettings();
 
         if (_startupFiles.Length > 0) Application.Idle += OnFirstIdle;
+        else Application.Idle += OnFirstIdleHint;
     }
 
     private ConvertOptions NewOptions() => new()
@@ -175,6 +176,27 @@ internal sealed class TrayApp : ApplicationContext
         var files = _startupFiles.Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         if (files.Length == 0) return;
         OpenWheel(files, NativeMethods.CursorPosition(), interactive: true);
+    }
+
+    /// <summary>
+    /// One balloon on the very first launch explains how files reach the wheel. Someone who
+    /// already handed it files does not need telling, and a diagnostic run has no business
+    /// showing hints or writing settings, so both are skipped. The flag is written before the
+    /// balloon is offered, so a balloon that policy suppressed still counts as delivered.
+    /// </summary>
+    private void OnFirstIdleHint(object? sender, EventArgs e)
+    {
+        Application.Idle -= OnFirstIdleHint;
+
+        if (_settings.FirstRunCompleted || Program.Quiet) return;
+
+        _settings.FirstRunCompleted = true;
+        _settings.Save();
+
+        Notify("Kyklos",
+            "Drag a file with Ctrl+Alt held to open a wheel of formats around it, or press " +
+            "Ctrl+Alt+C for whatever is selected. Pick a wedge and the file converts in " +
+            "place. This balloon opens Settings.");
     }
 
     // ---------------------------------------------------------------- wheel flow
