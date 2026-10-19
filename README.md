@@ -111,12 +111,26 @@ never offered as a target, so the ring always means something.
 dotnet build "src\Kyklos\Kyklos.csproj"
 & "src\Kyklos\bin\Debug\net9.0-windows10.0.19041.0\Kyklos.exe"
 
-# one self-contained exe (~54 MB, no runtime required)
+# one self-contained exe (~129 MB, no runtime required)
 dotnet publish "src\Kyklos\Kyklos.csproj" -c Release -r win-x64 `
   --self-contained true -p:PublishSingleFile=true `
-  -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true `
+  -p:IncludeNativeLibrariesForSelfExtract=true `
   -o dist
 ```
+
+Leave `-p:EnableCompressionInSingleFile=true` **off**. It would cut the exe to about 54 MB, but
+Windows refuses to start the compressed bundle on any machine where **Smart App Control** is
+enforcing — a bare *"An Application Control policy has blocked this file"*, with a
+`Microsoft-Windows-CodeIntegrity` event naming the exe. Check with:
+
+```powershell
+(Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy").VerifiedAndReputablePolicyState
+# 0 = off, 1 = enforcing, 2 = evaluating
+```
+
+It is not a reputation problem that clears by itself: an uncompressed build of the same source
+starts where a compressed one is blocked, every time. Smart App Control cannot be turned back on
+once it is switched off, so leaving compression off is the cheaper trade.
 
 The app is single-instance. Anything launched a second time — including the **Send to →
 Convert with Kyklos** shortcut, which Settings can install for you — hands its file list to
@@ -218,7 +232,8 @@ binary to inspect here — the vendor's published spec and press images are the 
   HEIC, TIFF, AVIF, BMP, then PDF.
 - A file's own format never appears on its own ring.
 - The hub carries the size of the selection (macOS shows `2.2 MB`; this shows the same pill).
-- Tool wedges use icon-style uppercase labels: COMPRESS, RESIZE, NO META, → PDF.
+- Tool wedges are uppercase words only, as in the original: COMPRESS, RESIZE, NO META, PDF. A
+  tool that is switched on is tinted rather than marked with a symbol.
 
 Known differences, deliberately:
 
