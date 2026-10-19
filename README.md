@@ -116,30 +116,71 @@ never offered as a target, so the ring always means something.
 dotnet build "src\Kyklos\Kyklos.csproj"
 & "src\Kyklos\bin\Debug\net9.0-windows10.0.19041.0\Kyklos.exe"
 
-# one self-contained exe (~129 MB, no runtime required)
+# one self-contained exe (~54 MB, no runtime required)
 dotnet publish "src\Kyklos\Kyklos.csproj" -c Release -r win-x64 `
   --self-contained true -p:PublishSingleFile=true `
   -p:IncludeNativeLibrariesForSelfExtract=true `
-  -o dist
+  -o "$env:LOCALAPPDATA\Programs\Kyklos"
 ```
 
-Leave `-p:EnableCompressionInSingleFile=true` **off**. It would cut the exe to about 54 MB, but
-Windows refuses to start the compressed bundle on any machine where **Smart App Control** is
-enforcing — a bare *"An Application Control policy has blocked this file"*, with a
-`Microsoft-Windows-CodeIntegrity` event naming the exe. Check with:
+That folder is the install location, so publishing there keeps everything pointing at the same
+file: the login entry and the **Send to** shortcut both resolve to whichever `Kyklos.exe` is
+running, rather than to a path someone typed once. Close Kyklos first — Windows will not replace
+a running executable. For the same reason nothing is published inside the repository any more;
+a build output that autostart depends on means a move, a re-clone or a `git clean -xdf` quietly
+breaks starting at login.
+
+Leave `-p:EnableCompressionInSingleFile=true` **on**: it is what keeps the exe near 54 MB rather
+than 129 MB, and it is *not* what Windows objects to. A **newly written unsigned exe can be
+refused on first sight**, whatever its size and whether or not it is compressed:
+
+```
+An Application Control policy has blocked this file.
+```
+
+The refusal comes from the shell that tried to start it, `Microsoft-Windows-CodeIntegrity`
+records event 3033 and 3077 naming the exe, and the file is fine — running it again a moment
+later works, and nothing needs rebuilding. It is intermittent, but it is worth expecting on the
+first launch after a publish, and worth passing on to anyone the exe is handed to. Check the
+policy with:
 
 ```powershell
 (Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy").VerifiedAndReputablePolicyState
 # 0 = off, 1 = enforcing, 2 = evaluating
 ```
 
-It is not a reputation problem that clears by itself: an uncompressed build of the same source
-starts where a compressed one is blocked, every time. Smart App Control cannot be turned back on
-once it is switched off, so leaving compression off is the cheaper trade.
+An earlier round of testing concluded that compression itself was the trigger, because the
+compressed build was refused and the uncompressed one ran. Both were freshly published; the
+refusal was the first-sight behaviour above and the difference in outcome was timing. Measured
+again with the same source, a compressed build starts on the first attempt with no code
+integrity event at all. Smart App Control cannot be turned back on once it is switched off, so
+there is nothing to weigh against leaving it enabled.
 
 The app is single-instance. Anything launched a second time — including the **Send to →
 Convert with Kyklos** shortcut, which Settings can install for you — hands its file list to
 the running tray over `WM_COPYDATA` and exits.
+
+## Icon
+
+The mark is the app reduced to one glyph: a dark disc carrying the wheel, an accent ring around
+it, and a glowing hub at the centre — the bright core and radial lanes of a telescope plate,
+flattened into the app's own palette. It is drawn in code (`Ui\Branding.cs`) and written out on
+demand, so it stays reproducible from source instead of being a binary of unknown origin:
+
+```powershell
+Kyklos.exe --writeicon "src\Kyklos\Resources\Kyklos.ico"
+```
+
+That writes the committed `.ico` plus a `-256.png` preview beside it for looking at without
+opening Explorer. Every size — 16, 20, 24, 32, 40, 48, 64, 128, 256 — is drawn at its own size
+rather than scaled down, because a 256-pixel mark scaled to 16 loses its ring. The frames are
+plain 32-bit bitmaps rather than PNGs; a PNG frame would be smaller, but GDI+ and a good deal of
+other software cannot parse one at all. Exit code `97` if it fails, `98` if no path was given.
+The file properties dialog and the taskbar are fed by `Product`/`Version`/`AssemblyTitle` in
+`Kyklos.csproj`, alongside `<ApplicationIcon>`.
+
+The tray and floating icons stay a plain ring rather than this mark, which survives a busy
+taskbar and any wallpaper better than a dark disc would.
 
 ## Settings
 
@@ -177,6 +218,10 @@ Two more switches exist for checking the GUI itself:
 Kyklos.exe --smoketest "C:\temp\sample.png"
 Kyklos.exe --uipreview "C:\temp\sample.png"
 ```
+
+`--writeicon` (see [Icon](#icon)) renders the app mark. None of these switches write settings:
+a diagnostic run has no business rewriting your configuration, and a test that clicks through
+the switches does click real ones.
 
 `--smoketest` boots the real tray, runs one genuine conversion through the very code path the
 wheel uses, then walks the floating drop target through show/hide/show and clicks **Hide this
