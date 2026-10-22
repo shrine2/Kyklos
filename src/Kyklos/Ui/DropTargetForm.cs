@@ -12,9 +12,13 @@ namespace Kyklos.Ui;
 internal sealed class DropTargetForm : LayeredForm
 {
     private const int BaseSize = 58;
+    private const int AnimIntervalMs = 16;
+
+    private readonly System.Windows.Forms.Timer _anim = new() { Interval = AnimIntervalMs };
 
     private int _size;
     private bool _hover;
+    private float _glow;
     private bool _pressed;
     private bool _moved;
     private Point _grabOffset;
@@ -27,6 +31,11 @@ internal sealed class DropTargetForm : LayeredForm
     public DropTargetForm()
     {
         AllowDrop = true;
+        _anim.Tick += (_, _) => StepGlow();
+        VisibleChanged += (_, _) =>
+        {
+            if (!Visible) _anim.Enabled = false;
+        };
     }
 
     public void ShowAt(Point location)
@@ -41,6 +50,7 @@ internal sealed class DropTargetForm : LayeredForm
 
         Bounds = new Rectangle(location, new Size(_size, _size));
         if (!Visible) Show();
+        if (Math.Abs(_glow - (_hover ? 1f : 0f)) > 0.01f) _anim.Enabled = true;
         RenderNow();
     }
 
@@ -145,6 +155,33 @@ internal sealed class DropTargetForm : LayeredForm
     {
         if (_hover == value) return;
         _hover = value;
+        _anim.Enabled = true;
+    }
+
+    /// <summary>
+    /// Eases the hover glow toward its target. While animating, every tick redraws; once it
+    /// settles the timer stops so an idle drop target costs nothing.
+    /// </summary>
+    private void StepGlow()
+    {
+        if (!Visible)
+        {
+            _anim.Enabled = false;
+            return;
+        }
+
+        var target = _hover ? 1f : 0f;
+        var delta = target - _glow;
+
+        if (Math.Abs(delta) < 0.01f)
+        {
+            _glow = target;
+            _anim.Enabled = false;
+            RenderNow();
+            return;
+        }
+
+        _glow += delta * 0.22f;
         RenderNow();
     }
 
@@ -165,7 +202,7 @@ internal sealed class DropTargetForm : LayeredForm
         g.SmoothingMode = SmoothingMode.AntiAlias;
 
         var inset = _size * 0.10f;
-        var radius = _size / 2f - inset;
+        var radius = (_size / 2f - inset) * (1f + 0.05f * _glow);
         var centre = _size / 2f;
 
         for (var i = 5; i >= 1; i--)
@@ -176,9 +213,10 @@ internal sealed class DropTargetForm : LayeredForm
         }
 
         var bounds = new RectangleF(centre - radius, centre - radius, radius * 2, radius * 2);
+        var glow = Math.Clamp(_glow, 0f, 1f);
         using (var fill = new LinearGradientBrush(bounds,
-                   _hover ? Theme.AccentSoft : Theme.Accent,
-                   _hover ? Theme.Accent : Color.FromArgb(255, 214, 96, 32),
+                   Lerp(Theme.Accent, Theme.AccentSoft, glow),
+                   Lerp(Color.FromArgb(255, 214, 96, 32), Theme.Accent, glow),
                    70f))
         {
             g.FillEllipse(fill, bounds);
@@ -189,6 +227,16 @@ internal sealed class DropTargetForm : LayeredForm
 
         DrawDropGlyph(g, centre, radius);
         return bitmap;
+    }
+
+    private static Color Lerp(Color from, Color to, float t)
+    {
+        t = Math.Clamp(t, 0f, 1f);
+        return Color.FromArgb(
+            (int)Math.Round(from.A + (to.A - from.A) * t),
+            (int)Math.Round(from.R + (to.R - from.R) * t),
+            (int)Math.Round(from.G + (to.G - from.G) * t),
+            (int)Math.Round(from.B + (to.B - from.B) * t));
     }
 
     /// <summary>A downward arrow onto a baseline — a universally readable "drop here" mark.</summary>

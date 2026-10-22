@@ -74,8 +74,8 @@ public static class FormatCatalog
 
     /// <summary>
     /// Targets offered for a source kind. When a sample path is supplied, its own format is
-    /// dropped from the ring — matching the macOS app, which never offers to convert a file
-    /// into the format it already is.
+    /// dropped from the ring — the wheel never offers to convert a file into the format it
+    /// already is.
     /// </summary>
     public static List<MediaTarget> TargetsFor(MediaKind source, string? samplePath = null)
     {
@@ -305,7 +305,7 @@ public static class FormatCatalog
         },
     };
 
-    // Ordered to match the macOS wheel: JPG, PNG, WebP, HEIC, TIFF, AVIF, BMP, then PDF.
+    // Clockwise from the top of the wheel: JPG, PNG, WebP, HEIC, TIFF, AVIF, BMP, then PDF.
     private static List<MediaTarget> ImageTargets() =>
     [
         new MediaTarget

@@ -18,7 +18,9 @@ namespace Kyklos.Ui;
 internal sealed class RadialMenuForm : LayeredForm
 {
     private const int DwellThresholdMs = 420;
-    private const int TickIntervalMs = 30;
+    private const int TickIntervalMs = 16;
+    private const int OpenMs = 150;
+    private const int GlowMs = 80;
 
     private readonly List<MediaTarget> _targets = [];
     private readonly List<ToolItem> _tools = [];
@@ -54,6 +56,14 @@ internal sealed class RadialMenuForm : LayeredForm
     private string _busyCaption = string.Empty;
     private string _busyDetail = string.Empty;
     private int _fadeAlpha = 255;
+
+    // Animation state. The wheel eases open, hover glows rather than snaps, and the caption
+    // dips and recovers when the hovered option changes.
+    private float _openT = 1f;
+    private float _hubGlow;
+    private float _captionGlow = 1f;
+    private float[] _targetGlow = [];
+    private float[] _toolGlow = [];
 
     public event Action<MediaTarget>? TargetChosen;
     public event Action<ToolId>? ToolRequested;
@@ -92,6 +102,7 @@ internal sealed class RadialMenuForm : LayeredForm
         _sourceCount = files.Count;
         _sourceBytes = SumBytes(files);
         ResetHover();
+        ResizeGlow();
     }
 
     private static long SumBytes(IReadOnlyList<string> files)
@@ -112,9 +123,12 @@ internal sealed class RadialMenuForm : LayeredForm
         _busy = false;
         _fading = false;
         _fadeAlpha = 255;
+        _openT = 0f;
+        _captionGlow = 1f;
 
         RebuildTools();
         ResetHover();
+        ResizeGlow();
 
         _scale = NativeMethods.ScaleForPoint(anchor);
         _radius = (int)Math.Round(148 * _scale);
@@ -221,6 +235,7 @@ internal sealed class RadialMenuForm : LayeredForm
     {
         _options = options;
         RebuildTools();
+        ResizeGlow();
         RenderNow();
     }
 
@@ -310,9 +325,17 @@ internal sealed class RadialMenuForm : LayeredForm
 
     private void OnTick()
     {
+        var glowMoved = StepGlow();
+
+        if (_openT < 1f)
+        {
+            _openT = Math.Min(1f, _openT + TickIntervalMs / (float)OpenMs);
+            glowMoved = true;
+        }
+
         if (_fading)
         {
-            _fadeAlpha -= 45;
+            _fadeAlpha -= 26;
             if (_fadeAlpha <= 0)
             {
                 _fading = false;
@@ -337,10 +360,14 @@ internal sealed class RadialMenuForm : LayeredForm
                 return;
             }
 
-            _spinDegrees = (_spinDegrees + 9f) % 360f;
+            // Degrees per tick at the 16 ms cadence: the same visual speed the 30 ms timer
+            // used, without the stair-stepping.
+            _spinDegrees = (_spinDegrees + 5f) % 360f;
             RenderNow();
             return;
         }
+
+        if (glowMoved) RenderNow();
 
         if (Interactive)
         {
@@ -366,6 +393,61 @@ internal sealed class RadialMenuForm : LayeredForm
         if (_dwellMs == 0) return;
         _dwellMs = 0;
         RenderNow();
+    }
+
+    /// <summary>Opens the glow/caption animators and sizes their arrays to the current rings.</summary>
+    private void ResizeGlow()
+    {
+        _targetGlow = new float[_targets.Count];
+        _toolGlow = new float[_tools.Count];
+        _hubGlow = 0f;
+    }
+
+    /// <summary>Eases every glow one tick toward its hover state. True when anything moved.</summary>
+    private bool StepGlow()
+    {
+        var k = TickIntervalMs / (float)GlowMs;
+        var moved = false;
+
+        for (var i = 0; i < _targetGlow.Length; i++)
+            moved |= Approach(ref _targetGlow[i], i == _hoverTarget ? 1f : 0f, k);
+
+        for (var i = 0; i < _toolGlow.Length; i++)
+            moved |= Approach(ref _toolGlow[i], i == _hoverTool ? 1f : 0f, k);
+
+        moved |= Approach(ref _hubGlow, _hoverHub ? 1f : 0f, k);
+        moved |= Approach(ref _captionGlow, 1f, k);
+        return moved;
+    }
+
+    private static bool Approach(ref float value, float target, float k)
+    {
+        if (Math.Abs(value - target) < 0.002f)
+        {
+            var changed = value != target;
+            value = target;
+            return changed;
+        }
+
+        value += (target - value) * k;
+        return true;
+    }
+
+    private static float EaseOutCubic(float t)
+    {
+        t = Math.Clamp(t, 0f, 1f);
+        var inverse = 1f - t;
+        return 1f - inverse * inverse * inverse;
+    }
+
+    private static Color Lerp(Color from, Color to, float t)
+    {
+        t = Math.Clamp(t, 0f, 1f);
+        return Color.FromArgb(
+            (int)Math.Round(from.A + (to.A - from.A) * t),
+            (int)Math.Round(from.R + (to.R - from.R) * t),
+            (int)Math.Round(from.G + (to.G - from.G) * t),
+            (int)Math.Round(from.B + (to.B - from.B) * t));
     }
 
     private void RequestCancel()
@@ -463,7 +545,10 @@ internal sealed class RadialMenuForm : LayeredForm
         if (previousTool != _hoverTool) _dwellMs = 0;
 
         if (previousTarget != _hoverTarget || previousTool != _hoverTool || previousHub != _hoverHub)
+        {
+            if (previousTarget != _hoverTarget || previousTool != _hoverTool) _captionGlow = 0.35f;
             RenderNow();
+        }
     }
 
     private void ResetHover()
@@ -481,7 +566,8 @@ internal sealed class RadialMenuForm : LayeredForm
         if (!Visible) return;
 
         using var bitmap = Render();
-        Present(bitmap, Location, _fadeAlpha);
+        var alpha = (int)Math.Round(Math.Clamp(_fadeAlpha, 0, 255) * EaseOutCubic(_openT));
+        Present(bitmap, Location, alpha);
     }
 
     private Bitmap Render()
@@ -494,6 +580,18 @@ internal sealed class RadialMenuForm : LayeredForm
 
         var cx = (float)_discCenter.X;
         var cy = (float)_discCenter.Y;
+
+        // Open: the ring grows the last 10% into place while it fades in. Close: it shrinks a
+        // hair as it fades, so the disappearance reads as receding rather than blinking out.
+        var open = EaseOutCubic(_openT);
+        var close = _fading ? Math.Clamp(_fadeAlpha / 255f, 0f, 1f) : 1f;
+        var animScale = (0.90f + 0.10f * open) * (0.97f + 0.03f * close);
+        if (animScale < 0.999f)
+        {
+            g.TranslateTransform(cx, cy);
+            g.ScaleTransform(animScale, animScale);
+            g.TranslateTransform(-cx, -cy);
+        }
 
         DrawShadow(g, cx, cy);
 
@@ -510,13 +608,13 @@ internal sealed class RadialMenuForm : LayeredForm
             g.FillEllipse(innerDisc, cx - _innerOuter, cy - _innerOuter, _innerOuter * 2, _innerOuter * 2);
         }
 
-        DrawRing(g, cx, cy, _outerInner, _outerOuter, _targets.Count, _hoverTarget,
+        DrawRing(g, cx, cy, _outerInner, _outerOuter, _targets.Count, _targetGlow,
             index => _targets[index].Label,
             index => _targets[index].Available,
             isToolRing: false,
             labelSize: _radius * 0.125f);
 
-        DrawRing(g, cx, cy, _hubR * 1.04f, _innerOuter, _tools.Count, _hoverTool,
+        DrawRing(g, cx, cy, _hubR * 1.04f, _innerOuter, _tools.Count, _toolGlow,
             index => _tools[index].Label,
             _ => true,
             isToolRing: true,
@@ -547,7 +645,7 @@ internal sealed class RadialMenuForm : LayeredForm
     }
 
     private void DrawRing(
-        Graphics g, float cx, float cy, float innerRadius, float outerRadius, int count, int hovered,
+        Graphics g, float cx, float cy, float innerRadius, float outerRadius, int count, IReadOnlyList<float> glow,
         Func<int, string> label, Func<int, bool> enabled, bool isToolRing, float labelSize,
         Func<int, bool>? switchedOn = null)
     {
@@ -562,12 +660,11 @@ internal sealed class RadialMenuForm : LayeredForm
             var start = WedgeStart(i, sweep);
             using var path = WedgePath(cx, cy, innerRadius, outerRadius, start, sweep);
 
-            if (i == hovered && enabled(i))
-            {
-                using var highlight = new LinearGradientBrush(bounds, Theme.AccentSoft, Theme.Accent, 70f);
-                g.FillPath(highlight, path);
-            }
-            else if (switchedOn is not null && switchedOn(i))
+            var baseColor = !enabled(i) ? Theme.WedgeDisabled : (isToolRing ? Theme.WedgeTool : Theme.Wedge);
+            using (var fill = new SolidBrush(baseColor))
+                g.FillPath(fill, path);
+
+            if (switchedOn is not null && switchedOn(i))
             {
                 // A tool that is switched on is tinted rather than flagged with a symbol, so the
                 // wedges stay readable as plain words.
@@ -578,11 +675,19 @@ internal sealed class RadialMenuForm : LayeredForm
                     70f);
                 g.FillPath(tint, path);
             }
-            else
+
+            var lit = i < glow.Count ? glow[i] : 0f;
+            if (lit > 0.004f && enabled(i))
             {
-                var color = !enabled(i) ? Theme.WedgeDisabled : (isToolRing ? Theme.WedgeTool : Theme.Wedge);
-                using var fill = new SolidBrush(color);
-                g.FillPath(fill, path);
+                // The hover highlight is laid over the wedge and faded by the eased glow, which
+                // is what makes crossing a wedge edge land as light rather than a jump cut.
+                var alpha = (int)Math.Round(255 * Math.Clamp(lit, 0f, 1f));
+                using var highlight = new LinearGradientBrush(
+                    bounds,
+                    Color.FromArgb(alpha, Theme.AccentSoft),
+                    Color.FromArgb(alpha, Theme.Accent),
+                    70f);
+                g.FillPath(highlight, path);
             }
 
             using var separator = new Pen(Color.FromArgb(70, 0, 0, 0), Math.Max(1f, _scale));
@@ -601,8 +706,12 @@ internal sealed class RadialMenuForm : LayeredForm
             var chord = 2f * middleRadius * MathF.Sin(sweep * MathF.PI / 360f) * 0.84f;
             using var font = FitFont(g, text, labelSize, chord);
 
-            var lit = i == hovered || (switchedOn is not null && switchedOn(i));
-            var color = !enabled(i) ? Theme.Dim : (lit ? Color.White : Theme.Text);
+            var lit = i < glow.Count ? glow[i] : 0f;
+            Color color;
+            if (!enabled(i)) color = Theme.Dim;
+            else if (switchedOn is not null && switchedOn(i)) color = Color.White;
+            else color = Lerp(Theme.Text, Color.White, lit);
+
             Theme.DrawShadowed(g, text, font, color, point);
         }
     }
@@ -630,13 +739,16 @@ internal sealed class RadialMenuForm : LayeredForm
 
     private void DrawHub(Graphics g, float cx, float cy)
     {
-        var radius = _hubR;
+        // A hair of growth on hover: enough to read as "alive" under the cursor, small enough
+        // that the disc never crowds the inner ring.
+        var radius = _hubR * (1f + 0.045f * _hubGlow);
+        var glow = Math.Clamp(_hubGlow, 0f, 1f);
 
         // The hub only turns accent when it means "cancel" *outside* a running job; while one
-        // is running it stays dark so the spinner arc on top of it keeps its contrast.
-        var hubFill = _hoverHub && !_busy
-            ? Theme.Accent
-            : _hoverHub ? Color.FromArgb(255, 40, 40, 49) : Color.FromArgb(255, 22, 22, 27);
+        // is running it stays in the dark range so the spinner arc keeps its contrast.
+        var hubFill = _busy
+            ? Lerp(Color.FromArgb(255, 22, 22, 27), Color.FromArgb(255, 40, 40, 49), glow)
+            : Lerp(Color.FromArgb(255, 22, 22, 27), Theme.Accent, glow);
 
         using (var brush = new SolidBrush(hubFill))
             g.FillEllipse(brush, cx - radius, cy - radius, radius * 2, radius * 2);
@@ -657,24 +769,31 @@ internal sealed class RadialMenuForm : LayeredForm
             using (var arc = new Pen(Theme.Accent, thickness) { StartCap = LineCap.Round, EndCap = LineCap.Round })
                 g.DrawArc(arc, cx - ring, cy - ring, ring * 2, ring * 2, _spinDegrees, 260f);
 
-            if (_hoverHub)
+            if (glow > 0.02f)
             {
                 using var cancelFont = Theme.Font(Math.Max(7f, radius * 0.5f), FontStyle.Bold);
-                Theme.DrawShadowed(g, "✕", cancelFont, Color.White, new PointF(cx, cy));
+                Theme.DrawShadowed(g, "✕", cancelFont, Color.FromArgb((int)Math.Round(255 * glow), 255, 255, 255),
+                    new PointF(cx, cy));
             }
 
             return;
         }
 
-        if (_hoverHub)
+        // Cancel mark and size pill crossfade instead of swapping, so moving onto the hub
+        // reads as a change of intent rather than a different control appearing.
+        if (glow > 0.02f)
         {
             using var cancelFont = Theme.Font(Math.Max(8f, radius * 0.62f), FontStyle.Bold);
-            Theme.DrawShadowed(g, "✕", cancelFont, Color.White, new PointF(cx, cy));
-            return;
+            Theme.DrawShadowed(g, "✕", cancelFont, Color.FromArgb((int)Math.Round(255 * glow), 255, 255, 255),
+                new PointF(cx, cy));
         }
 
-        // The macOS app puts the size of the selection in the hub while a format is being
-        // chosen. The pill is allowed to run a little wider than the disc.
+        if (1f - glow <= 0.02f) return;
+
+        var restAlpha = 1f - glow;
+
+        // The hub carries the size of the selection while a format is being chosen. The pill is
+        // allowed to run a little wider than the disc.
         if (_sourceBytes > 0)
         {
             using var font = Theme.Font(Math.Max(8f, radius * 0.42f), FontStyle.Bold);
@@ -688,12 +807,12 @@ internal sealed class RadialMenuForm : LayeredForm
                 measured.Height);
 
             using var pill = PillPath(bounds);
-            using (var fill = new SolidBrush(Color.FromArgb(234, 255, 253, 245)))
+            using (var fill = new SolidBrush(Color.FromArgb((int)Math.Round(234 * restAlpha), 255, 253, 245)))
                 g.FillPath(fill, pill);
-            using (var rim = new Pen(Color.FromArgb(56, 0, 0, 0), Math.Max(1f, _scale)))
+            using (var rim = new Pen(Color.FromArgb((int)Math.Round(56 * restAlpha), 0, 0, 0), Math.Max(1f, _scale)))
                 g.DrawPath(rim, pill);
 
-            using var textBrush = new SolidBrush(Color.FromArgb(255, 28, 26, 24));
+            using var textBrush = new SolidBrush(Color.FromArgb((int)Math.Round(255 * restAlpha), 28, 26, 24));
             using var centred = new StringFormat
             {
                 Alignment = StringAlignment.Center,
@@ -704,7 +823,8 @@ internal sealed class RadialMenuForm : LayeredForm
         }
 
         using var kindFont = Theme.Font(Math.Max(8f, radius * 0.46f), FontStyle.Bold);
-        Theme.DrawShadowed(g, KindLabel(_source), kindFont, Theme.Muted, new PointF(cx, cy));
+        var kindColor = Color.FromArgb((int)Math.Round(255 * restAlpha), Theme.Muted.R, Theme.Muted.G, Theme.Muted.B);
+        Theme.DrawShadowed(g, KindLabel(_source), kindFont, kindColor, new PointF(cx, cy));
     }
 
     private void DrawCaption(Graphics g, float cx)
@@ -726,13 +846,16 @@ internal sealed class RadialMenuForm : LayeredForm
         }
 
         var headline = HoverDescription();
+        var fade = Math.Clamp(_captionGlow, 0f, 1f);
+        var textColor = Color.FromArgb((int)Math.Round(255 * fade), Theme.Text.R, Theme.Text.G, Theme.Text.B);
         using (var font = Theme.Font(Math.Max(10f, 14.5f * _scale), FontStyle.Bold))
-            Theme.DrawShadowed(g, headline, font, Theme.Text, new PointF(cx, top + 10f * _scale));
+            Theme.DrawShadowed(g, headline, font, textColor, new PointF(cx, top + 10f * _scale));
 
         if (!Interactive) return;
 
+        var subColor = Color.FromArgb((int)Math.Round(255 * fade), Theme.Muted.R, Theme.Muted.G, Theme.Muted.B);
         using var subFont = Theme.Font(Math.Max(9f, 11.5f * _scale));
-        Theme.DrawShadowed(g, _options.Describe(), subFont, Theme.Muted, new PointF(cx, top + 29f * _scale));
+        Theme.DrawShadowed(g, _options.Describe(), subFont, subColor, new PointF(cx, top + 29f * _scale));
     }
 
     private string HoverDescription()
@@ -765,8 +888,8 @@ internal sealed class RadialMenuForm : LayeredForm
 
     /// <summary>
     /// Where wedge <paramref name="index"/> starts. The first wedge is centred on 12 o'clock —
-    /// matching the macOS app, where the primary format sits at the top — so it begins half a
-    /// sweep anticlockwise of the vertical.
+    /// the primary format sits at the top — so it begins half a sweep anticlockwise of the
+    /// vertical.
     /// </summary>
     private static float WedgeStart(int index, float sweep) => -90f - sweep / 2f + index * sweep;
 
