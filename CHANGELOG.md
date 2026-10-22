@@ -2,6 +2,15 @@
 
 All notable changes to Kyklos. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+- **Motion**: the wheel eases open (150 ms, 0.90 → 1.0 while fading in), shrinks slightly as
+  it fades out, glows per wedge on hover instead of snapping, pulses and crossfades its hub
+  pill into the cancel mark, and dips the caption when the hovered option changes. The
+  spinner runs at 60 Hz. The floating drop target eases its hover glow and size.
+- Idle surfaces stop their animation timers once a transition settles, and the render loop
+  only redraws while something is actually moving.
+
 ## 1.0.0 - 2026-10-19
 
 First public release.
